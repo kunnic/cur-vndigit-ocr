@@ -19,6 +19,8 @@ def qr_detect(
     if image is None:
         return None
 
+    print(type(image))
+
     qcd = cv2.QRCodeDetector();
 
     retval, decoded_info, points, straight_qrcode = qcd.detectAndDecodeMulti(image);
