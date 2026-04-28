@@ -1,71 +1,56 @@
-import cv2
+import joblib
 import numpy as np
 from typing import Tuple
-from .base import IBlankDetector
-import joblib
+from strategies.base import IBlankDetector
+import cv2
 
-class FastBlankDetector(IBlankDetector):
+class BlankDetector(IBlankDetector):
     def __init__(
-        self, 
-        gray_threshold_value: float = 127,
-        upper_threshold: float = 0.95,
-        lower_threshold: float = 0.01
-    ):
-        self.gray_threshold_value = gray_threshold_value
-        self.upper_threshold = upper_threshold
-        self.lower_threshold = lower_threshold
-    
-    def is_blank(
         self,
-        image: np.ndarray
-    ) -> Tuple[bool, float, str]:
+        model_path: str,
+        threshold: float = 0.5,
+        lower: float = 0.005,
+        upper: float = 0.95,
+    ):
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError(f"threshold phải trong [0,1], nhận {threshold}")
+        if not 0.0 <= lower < upper <= 1.0:
+            raise ValueError(f"Cần 0 <= lower < upper <= 1, nhận lower={lower}, upper={upper}")
 
-        black_ratio = np.sum(image < self.gray_threshold_value) / image.size
+        self.threshold = threshold
+        self.lower = lower
+        self.upper = upper
+        self.model = joblib.load(model_path)
 
-        is_blank = black_ratio < self.lower_threshold or black_ratio > self.upper_threshold
-    
-        return (is_blank, black_ratio, "black-ratio certain")
-
-class RFBlankDetector(IBlankDetector):
-    def __init__(self, 
-        model_path: str, 
-        confidence_threshold: float = 0.5):
-        self.confidence_threshold = confidence_threshold
+    @staticmethod
+    def extract_blank_features(image: np.ndarray) -> np.ndarray:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
         
-        try:
-            self.model = joblib.load(model_path)
-        except Exception as e:
-            raise RuntimeError(f"Không thể load mô hình RF tại {model_path}. Chi tiết lỗi: {e}")
+        # 1. Black pixel ratio (Ngưỡng 127)
+        black_ratio = float(np.sum(gray < 127) / gray.size)
 
-    def _extract_features(self, image: np.ndarray) -> tuple:
-        '''
-            Black page shouldnt be inputed and presented here.
-        '''
-        black_threshold = 127
+        # 2. Standard Deviation
+        std_val = float(np.std(gray))
 
-        # Black pixel ratio
-        black_ratio = np.sum(image < black_threshold) / image.size
-
-        # std dev
-        std = np.std(image)
-
-        # hist
-        hist = np.histogram(image, bins=256, range=(0, 256))[0] / image.size
+        # 3. Entropy
+        hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten() / gray.size
         hist = hist[hist > 0]
-        entropy = -np.sum(hist * np.log2(hist))
+        entropy_val = float(-np.sum(hist * np.log2(hist)))
 
-        return tuple[black_ratio, std, entropy]
+        return np.array([[black_ratio, std_val, entropy_val]])
 
     def is_blank(self, image: np.ndarray) -> Tuple[bool, float, str]:
+        features = self.extract_blank_features(image)
+        black_ratio = float(features[0])
 
-        features = self._extract_features(image)
+        # Fast path: vùng chắc chắn
+        if black_ratio < self.lower:
+            return True, 1.0, f"density_too_white (ratio={black_ratio:.4f})"
+        if black_ratio > self.upper:
+            return True, 1.0, f"density_too_black (ratio={black_ratio:.4f})"
 
-        probabilities = self.model.predict_proba(features)[0]
+        probs = self.model.predict_proba(features.reshape(1, -1))[0]
+        blank_score = float(probs[1])
+        is_blank = blank_score >= self.threshold
 
-        blank_confidence = probabilities[1]
-
-        is_blank = bool(blank_confidence >= self.confidence_threshold)
-
-        reason = f"random_forest (confidence: {blank_confidence:.4f})"
-
-        return is_blank, float(blank_confidence), reason
+        return is_blank, blank_score, f"rf_model (score={blank_score:.4f})"
