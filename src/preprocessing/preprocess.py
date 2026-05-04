@@ -160,9 +160,6 @@ class Preprocessing:
             "qr_codes": qr_list,
         }
 
-    # ------------------------------------------------------------------
-    # Main pipeline
-    # ------------------------------------------------------------------
     def _process(self, image: np.ndarray) -> tuple[np.ndarray, dict]:
         # 1. Grayscale
         gray = self._to_grayscale(image)

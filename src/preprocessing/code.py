@@ -1,14 +1,16 @@
 from typing import Any
+from attr import dataclass
+
 import numpy as np
 from pyzbar.pyzbar import decode, ZBarSymbol
 
+@dataclass
 class CodeDataObject:
-    def __init__(self, type: str, content: str, bbox: tuple[int, int, int, int], polygon: list[tuple[int, int]], quality: int):
-        self.type = type
-        self.content = content
-        self.bbox = bbox
-        self.polygon = polygon
-        self.quality = quality
+    type: str
+    content: str
+    bbox: tuple[int, int, int, int]
+    polygon: list[tuple[int, int]]
+    quality: int
 
 class CodeDetector:
     def __init__(self, types: list[str] = None):
