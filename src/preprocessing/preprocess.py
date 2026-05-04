@@ -4,11 +4,29 @@ import cv2
 from .blank import BlankDetector
 from .code import CodePreprocessor
 
-class Preprocessing:
-    def __init__(self, **kwargs):
-        self.blank_detector = BlankDetector(**kwargs)
-        self.code_preprocessor = CodePreprocessor(**kwargs)
+# pipeline_config = {
+#     "blank_detector": {
+#         "model_path": "models/rf_blank_v1.joblib", 
+#         "threshold": 0.65,
+#         "lower": 0.01,
+#         "upper": 0.98
+#     },
 
+#     "code_detector": {
+#         "types": ["QRCODE", "CODE128"]
+#     }
+# }
+
+class Preprocessing:
+    def __init__(self, config: dict = None):
+        self.config = config if config is not None else {}
+
+        blank_config = self.config.get('blank_detector', {})
+        code_config = self.config.get('code_preprocessor', {})
+
+        self.blank_detector = BlankDetector(**blank_config)
+        self.code_preprocessor = CodePreprocessor(**code_config)
+    
     @staticmethod
     def process(image: np.ndarray) -> np.ndarray:
         if image is None or image.size == 0:
@@ -75,3 +93,5 @@ class Preprocessing:
         sharpened = cv2.filter2D(normalized, -1, kernel)
 
         return sharpened
+    
+    def 

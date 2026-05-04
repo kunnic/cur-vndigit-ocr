@@ -54,6 +54,8 @@ class BlankDetector():
                 - A list containing its feature, 
                     featuring black_ratio, std_val, entropy_val
         '''
+
+        # (?/->) removes if previous step has converted to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
         
         black_ratio = float(np.sum(gray < 127) / gray.size)
@@ -81,8 +83,10 @@ class BlankDetector():
                     featuring is_blank, blank_score and detailed comment.
         '''
         features = self.extract_blank_features(image)
-        black_ratio = float(features[0])
-
+        
+        # Not effective on generated dataset, but still keep 
+        #       for future use on real dataset
+        # black_ratio = float(features[0])
         # if black_ratio < self.lower:
         #     return True, 1.0, f"density_too_white (ratio={black_ratio:.4f})"
         # if black_ratio > self.upper:
