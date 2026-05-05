@@ -105,6 +105,8 @@ class BlankDetector():
 
         return BlankResult(
             is_blank = is_blank, 
-            confidence = confidence, 
+            # its 1 - confidence because the model predicts the probability of being blank, but confidence should be higher when it's more likely to be blank.
+            # so 90% confidence is 90% sure about not being blank.
+            confidence = 1 - confidence, 
             comment = f"rf_model (score={confidence:.4f})"
         )

@@ -219,7 +219,12 @@ class Preprocessing:
         # 2. Blank check (early exit)
         blank_result = self.blank_detector.is_blank(gray)
         if blank_result.is_blank:
-            return image, self._build_metadata(True, blank_result.confidence, blank_result.comment, [])
+            # return image, self._build_metadata(True, blank_result.confidence, blank_result.comment, [])
+
+            return PreprocessResult(
+                image = image, 
+                metadata = self._build_metadata(True, blank_result.confidence, blank_result.comment, [])
+            )
 
         # 3. Denoise
         blurred = self._denoise(gray)
@@ -240,6 +245,7 @@ class Preprocessing:
         sharpened = self._sharpen(normalized)
 
         metadata = self._build_metadata(False, blank_result.confidence, blank_result.comment, qr_results)
+
         return PreprocessResult(
             image = sharpened, 
             metadata = metadata
