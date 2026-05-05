@@ -1,7 +1,16 @@
 from typing import Any
+from attr import dataclass
+
 import numpy as np
 from pyzbar.pyzbar import decode, ZBarSymbol
 
+@dataclass
+class CodeDataObject:
+    type: str
+    content: str
+    bbox: tuple[int, int, int, int]
+    polygon: list[tuple[int, int]]
+    quality: int
 
 class CodeDetector:
     def __init__(self, types: list[str] = None):
@@ -14,7 +23,7 @@ class CodeDetector:
                 )
         self._types = types
 
-    def detect(self, image: np.ndarray) -> list[dict[str, Any]]:
+    def detect(self, image: np.ndarray) -> list[CodeDataObject]: # can be more than one code in a page
         if image is None or image.size == 0:
             return []
 
@@ -25,12 +34,21 @@ class CodeDetector:
             results = decode(image)
 
         return [self._parse(r) for r in results]
+    
+    # r: Any because in the source code of pyzbar, the return type of decode is not well defined. IIt can return weird objects that are not documented according to the author of the lib himself.
+    def _parse(self, r: Any) -> CodeDataObject:
+        # return {
+        #     "type": r.type,
+        #     "content": r.data.decode("utf-8", errors="replace"),
+        #     "bbox": (r.rect.left, r.rect.top, r.rect.width, r.rect.height),
+        #     "polygon": [(p.x, p.y) for p in r.polygon],
+        #     "quality": r.quality,
+        # }
 
-    def _parse(self, r) -> dict[str, Any]:
-        return {
-            "type": r.type,
-            "content": r.data.decode("utf-8", errors="replace"),
-            "bbox": (r.rect.left, r.rect.top, r.rect.width, r.rect.height),
-            "polygon": [(p.x, p.y) for p in r.polygon],
-            "quality": r.quality,
-        }
+        return CodeDataObject(
+            type=r.type, 
+            content=r.data.decode("utf-8", errors="replace"),
+            bbox=(r.rect.left, r.rect.top, r.rect.width, r.rect.height),
+            polygon=[(p.x, p.y) for p in r.polygon],
+            quality=r.quality   
+        )
