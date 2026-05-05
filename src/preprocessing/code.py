@@ -35,20 +35,20 @@ class CodeDetector:
 
         return [self._parse(r) for r in results]
     
-    # r: Any because in the source code of pyzbar, the return type of decode is not well defined. IIt can return weird objects that are not documented according to the author of the lib himself.
-    def _parse(self, r: Any) -> CodeResult:
+    # result: Any because in the source code of pyzbar, the return type of decode is not well defined. IIt can return weird objects that are not documented according to the author of the lib himself.
+    def _parse(self, result: Any) -> CodeResult:
         # return {
-        #     "type": r.type,
-        #     "content": r.data.decode("utf-8", errors="replace"),
-        #     "bbox": (r.rect.left, r.rect.top, r.rect.width, r.rect.height),
-        #     "polygon": [(p.x, p.y) for p in r.polygon],
-        #     "quality": r.quality,
+        #     "type": result.type,
+        #     "content": result.data.decode("utf-8", errors="replace"),
+        #     "bbox": (result.rect.left, result.rect.top, result.rect.width, result.rect.height),
+        #     "polygon": [(p.x, p.y) for p in result.polygon],
+        #     "quality": result.quality,
         # }
 
         return CodeResult(
-            type=r.type, 
-            content=r.data.decode("utf-8", errors="replace"),
-            bbox=(r.rect.left, r.rect.top, r.rect.width, r.rect.height),
-            polygon=[(p.x, p.y) for p in r.polygon],
-            quality=r.quality   
+            type=result.type, 
+            content=result.data.decode("utf-8", errors="replace"),
+            bbox=(result.rect.left, result.rect.top, result.rect.width, result.rect.height),
+            polygon=[(p.x, p.y) for p in result.polygon],
+            quality=result.quality   
         )
