@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 
 from .blank import BlankDetector
-from .code import CodePreprocessor
+from .code import CodeDetector
 
 
 # pipeline_config = {
@@ -37,7 +37,7 @@ class Preprocessing:
         code_config = self.config.get("code_preprocessor", {})
 
         self.blank_detector = BlankDetector(**blank_config)
-        self.code_preprocessor = CodePreprocessor(**code_config)
+        self.code_preprocessor = CodeDetector(**code_config)
 
         self.cv_cfg = self.config.get("image_preprocessor", {})
 
@@ -160,9 +160,6 @@ class Preprocessing:
             "qr_codes": qr_list,
         }
 
-    # ------------------------------------------------------------------
-    # Main pipeline
-    # ------------------------------------------------------------------
     def _process(self, image: np.ndarray) -> tuple[np.ndarray, dict]:
         # 1. Grayscale
         gray = self._to_grayscale(image)
