@@ -1,10 +1,13 @@
+from attr import dataclass
+
 import numpy as np
 import cv2
 
 from .blank import BlankDetector
 from .code import CodeDetector
+from .rotate import RotationDetector
 
-
+'''
 # pipeline_config = {
 #     "blank_detector": {
 #         "model_path": "models/rf_blank_v1.joblib",
@@ -27,7 +30,58 @@ from .code import CodeDetector
 #         }
 #     }
 # }
+'''
 
+@dataclass
+class PreprocessResult:
+    image: np.ndarray
+    metadata: dict
+
+    def __str__(self):
+        parts = []
+
+        # Image info
+        parts.append("IMAGE")
+        if self.image is not None:
+            h, w = self.image.shape[:2]
+            c = self.image.shape[2] if len(self.image.shape) > 2 else 1
+            parts.append(f"  size     : {w} x {h}")
+            parts.append(f"  channels : {c}")
+            parts.append(f"  dtype    : {self.image.dtype}")
+        else:
+            parts.append("  None")
+
+        # Metadata
+        status = self.metadata.get("status")
+        is_blank = self.metadata.get("is_blank", False)
+        confidence = self.metadata.get("confidence", 0.0)
+        qr_codes = self.metadata.get("qr_codes", [])
+
+        parts.append("\nMETADATA")
+        parts.append(f"  status     : {status}")
+        parts.append(f"  is_blank   : {is_blank}")
+        parts.append(f"  confidence : {confidence:.4f}")
+        parts.append(f"  qr_count   : {len(qr_codes)}")
+
+        # QR details
+        if qr_codes:
+            parts.append("\nQR OBJECTS")
+            for i, qr in enumerate(qr_codes, 1):
+                parts.append(f"  [{i}]")
+                
+                if hasattr(qr, '__dict__'):
+                    data = qr.__dict__
+                elif hasattr(qr, '__slots__'):
+                    data = {s: getattr(qr, s) for s in qr.__slots__}
+                elif isinstance(qr, dict):
+                    data = qr
+                else:
+                    data = {"value": str(qr)}
+
+                for k, v in data.items():
+                    parts.append(f"    {k}: {v}")
+
+        return "\n".join(parts)
 
 class Preprocessing:
     def __init__(self, config: dict = None):
@@ -35,15 +89,14 @@ class Preprocessing:
 
         blank_config = self.config.get("blank_detector", {})
         code_config = self.config.get("code_preprocessor", {})
+        osd_config = self.config.get("tesseract", {})
 
         self.blank_detector = BlankDetector(**blank_config)
         self.code_preprocessor = CodeDetector(**code_config)
+        self.rotation_detector = RotationDetector(**osd_config)
 
         self.cv_cfg = self.config.get("image_preprocessor", {})
 
-    # ------------------------------------------------------------------
-    # Helper steps
-    # ------------------------------------------------------------------
     @staticmethod
     def _to_grayscale(image: np.ndarray) -> np.ndarray:
         """Convert BGR image to grayscale. If already 1-channel, returns a copy."""
@@ -118,7 +171,6 @@ class Preprocessing:
             x, y, w, h = cv2.boundingRect(coords)
             cropped = image[y:y + h, x:x + w]
 
-        # Safety: ensure single-channel output
         if len(cropped.shape) == 3:
             cropped = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
         return cropped
@@ -150,12 +202,31 @@ class Preprocessing:
         kernel = np.array(kernel_val)
         return cv2.filter2D(image, -1, kernel)
 
+    def _orientation(self, image: np.ndarray) -> np.ndarray:
+        """Detect and correct orientation using Tesseract's OSD."""
+        result = self.rotation_detector.detect(image)
+
+        if result.confidence < 0.1 or result.angle == 0:
+            print(f"Low confidence ({result.confidence:.2f}) in orientation detection, skipping rotation.")
+            return image
+        if result.angle == 90:
+            print("Rotating 90 degrees clockwise")
+            return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        elif result.angle == 180:
+            print("Rotating 180 degrees")
+            return cv2.rotate(image, cv2.ROTATE_180)
+        elif result.angle == 270:
+            print("Rotating 270 degrees clockwise")
+            return cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            
+        return image
+
     @staticmethod
-    def _build_metadata(is_blank: bool, blank_score, comment, qr_list) -> dict:
+    def _build_metadata(is_blank: bool, confidence, comment, qr_list) -> dict:
         return {
             "status": "success",
             "is_blank": is_blank,
-            "blank_score": blank_score,
+            "confidence": confidence,
             "comment": comment,
             "qr_codes": qr_list,
         }
@@ -165,27 +236,39 @@ class Preprocessing:
         gray = self._to_grayscale(image)
 
         # 2. Blank check (early exit)
-        is_blank, blank_score, comment = self.blank_detector.is_blank(gray)
-        if is_blank:
-            return image, self._build_metadata(True, blank_score, comment, [])
+        blank_result = self.blank_detector.is_blank(gray)
+        if blank_result.is_blank:
+            # return image, self._build_metadata(True, blank_result.confidence, blank_result.comment, [])
+
+            return PreprocessResult(
+                image = image, 
+                metadata = self._build_metadata(True, blank_result.confidence, blank_result.comment, [])
+            )
 
         # 3. Denoise
         blurred = self._denoise(gray)
 
-        # 4. Deskew (operates on denoised grayscale)
-        deskewed = self._deskew(blurred)
+        # 4. Orientation correction
+        oriented = self._orientation(blurred)
 
-        # 5. Autocrop
+        # 5. Deskew (operates on denoised grayscale)
+        deskewed = self._deskew(oriented)
+
+        # 6. Autocrop
         cropped = self._autocrop(deskewed)
 
-        # 6. QR / Barcode detection on the cleanest grayscale version
-        qr_list = self.code_preprocessor.detect(cropped)
+        # 7. QR / Barcode detection on the cleanest grayscale version
+        qr_results = self.code_preprocessor.detect(cropped)
 
-        # 7. Adaptive threshold (background normalization)
+        # 8. Adaptive threshold (background normalization)
         normalized = self._adaptive_threshold(cropped)
 
-        # 8. Sharpening
+        # 9. Sharpening
         sharpened = self._sharpen(normalized)
 
-        metadata = self._build_metadata(False, blank_score, comment, qr_list)
-        return sharpened, metadata
+        metadata = self._build_metadata(False, blank_result.confidence, blank_result.comment, qr_results)
+
+        return PreprocessResult(
+            image = sharpened, 
+            metadata = metadata
+        )
