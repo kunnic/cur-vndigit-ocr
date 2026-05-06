@@ -188,7 +188,7 @@ class Preprocessing:
         )
         kernel = np.array(kernel_val)
         return cv2.filter2D(image, -1, kernel)
-
+    
     # def _transparent_to_white(self, image: np.ndarray) -> np.ndarray:
     #     if image.ndim != 3 or image.shape[2] != 4:
     #         return image
@@ -201,6 +201,8 @@ class Preprocessing:
 
     #     composited = bgr * alpha + white * (1.0 - alpha)
     #     return np.clip(composited, 0, 255).astype(np.uint8)
+
+    
 
     @staticmethod
     def _build_metadata(is_blank: bool, confidence, comment, qr_list) -> dict:
