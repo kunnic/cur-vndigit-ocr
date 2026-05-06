@@ -144,24 +144,24 @@ class Preprocessing:
 
         return rotated
 
-    def _autocrop(self, image: np.ndarray) -> np.ndarray:
-        """Crop empty borders using Otsu threshold + bounding box of non-zero pixels."""
+    def _autocrop(self, gray: np.ndarray) -> np.ndarray:
         if not self.cv_cfg.get("enable_autocrop", True):
-            return image
+            return gray
 
+        inv = cv2.bitwise_not(gray)
         _, thresh = cv2.threshold(
-            image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            inv, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
         )
         coords = cv2.findNonZero(thresh)
         if coords is None:
-            cropped = image
-        else:
-            x, y, w, h = cv2.boundingRect(coords)
-            cropped = image[y:y + h, x:x + w]
+            return gray
 
-        if len(cropped.shape) == 3:
-            cropped = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
-        return cropped
+        x, y, w, h = cv2.boundingRect(coords)
+
+        if w * h < 0.1 * gray.shape[0] * gray.shape[1]:
+            return gray
+
+        return gray[y:y + h, x:x + w]
 
     def _adaptive_threshold(self, image: np.ndarray) -> np.ndarray:
         """Normalize background (yellowish paper, uneven lighting) via adaptive thresholding."""
@@ -246,29 +246,29 @@ class Preprocessing:
                     True, blank_result.confidence, blank_result.comment, []
                 ),
             )
-
-        # 3. Orientation correction
+        
+        # 3. Orientation
         oriented = self.rotation_detector._orient(gray)
 
-        # added perspective correction
+        # 4. Perspective
         corrected = self._perspective_correct(oriented)
 
-        # 4. Light denoise
+        # 5. Denoise
         blurred = self._denoise(corrected)
 
-        # 5. Deskew
+        # 6. Deskew
         deskewed = self._deskew(blurred)
 
-        # 6. Autocrop
+        # 7. Autocrop
         cropped = self._autocrop(deskewed)
 
-        # 7. QR / Barcode detection
+        # 8. QR/Barcode
         qr_results = self.code_preprocessor.detect(cropped)
 
-        # 8. Adaptive threshold
+       # 10. Adaptive threshold
         normalized = self._adaptive_threshold(cropped)
 
-        # 9. Sharpening
+        # 9. Sharpen grayscale
         sharpened = self._sharpen(normalized)
 
         metadata = self._build_metadata(
