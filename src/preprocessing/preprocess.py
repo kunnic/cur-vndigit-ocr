@@ -222,8 +222,6 @@ class Preprocessing:
     #     composited = bgr * alpha + white * (1.0 - alpha)
     #     return np.clip(composited, 0, 255).astype(np.uint8)
 
-
-
     @staticmethod
     def _build_metadata(is_blank: bool, confidence, comment, qr_list) -> dict:
         return {
@@ -254,8 +252,11 @@ class Preprocessing:
         # 3. Orientation correction
         oriented = self.rotation_detector._orient(gray)
 
+        # added perspective correction
+        corrected = self._perspective_correct(oriented)
+
         # 4. Light denoise
-        blurred = self._denoise(oriented)
+        blurred = self._denoise(corrected)
 
         # 5. Deskew
         deskewed = self._deskew(blurred)

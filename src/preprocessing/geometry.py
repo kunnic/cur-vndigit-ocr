@@ -44,9 +44,12 @@ def four_point_transform(image: np.ndarray, pts: np.ndarray) -> np.ndarray:
     return warped
 
 def detect_document(image: np.ndarray) -> np.ndarray:
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Blur để giảm noise
+    if image.ndim == 3 and image.shape[2] in (3, 4):
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+
     blurred = cv2.GaussianBlur(gray, (3, 3), 0)
 
     # Edge detection
