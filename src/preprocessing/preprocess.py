@@ -113,7 +113,7 @@ class Preprocessing:
 
     def _deskew(self, gray: np.ndarray) -> np.ndarray:
         """
-        Detect skew using the largest contour's minAreaRect and rotate the image.
+        Detect skew using the minAreaRect of ALL foreground pixels.
         Returns the deskewed grayscale image.
         """
         if not self.cv_cfg.get("enable_deskew", True):
@@ -122,39 +122,26 @@ class Preprocessing:
         deskew_cfg = self.cv_cfg.get("deskew", {})
         max_angle = deskew_cfg.get("max_angle", 45)
 
-        # Invert + Otsu binarization to highlight foreground
-        inverted = cv2.bitwise_not(gray)
-        _, thresh = cv2.threshold(
-            inverted, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
-        )
+        gray_inv = cv2.bitwise_not(gray)
+        thresh = cv2.threshold(gray_inv, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
 
-        # Find contours and use the largest one
-        contours, _ = cv2.findContours(
-            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        if not contours:
-            return gray
+        # Tìm tất cả các tọa độ pixel có giá trị > 0
+        coords = np.column_stack(np.where(thresh > 0))
+        angle = cv2.minAreaRect(coords)[-1]
 
-        largest = max(contours, key=cv2.contourArea)
-        angle = cv2.minAreaRect(largest)[-1]
-
-        # Normalize angle to [-45, 45]
+        # Điều chỉnh góc xoay
         if angle < -45:
-            angle = 90 + angle
-        elif angle > 45:
-            angle = angle - 90
+            angle = -(90 + angle)
+        else:
+            angle = -angle
 
-        # Clamp to configured maximum
-        angle = max(min(angle, max_angle), -max_angle)
-
+        # Xoay ảnh
         (h, w) = gray.shape[:2]
         center = (w // 2, h // 2)
         M = cv2.getRotationMatrix2D(center, angle, 1.0)
-        return cv2.warpAffine(
-            gray, M, (w, h),
-            flags=cv2.INTER_CUBIC,
-            borderMode=cv2.BORDER_REPLICATE,
-        )
+        rotated = cv2.warpAffine(gray, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+
+        return rotated
 
     def _autocrop(self, image: np.ndarray) -> np.ndarray:
         """Crop empty borders using Otsu threshold + bounding box of non-zero pixels."""
@@ -221,6 +208,20 @@ class Preprocessing:
             
         return image
 
+
+    # def _transparent_to_white(self, image: np.ndarray) -> np.ndarray:
+    #     if image.ndim != 3 or image.shape[2] != 4:
+    #         return image
+
+    #     bgr = image[:, :, :3].astype(np.float32)
+    #     alpha = image[:, :, 3].astype(np.float32) / 255.0
+    #     alpha = alpha[:, :, np.newaxis]
+
+    #     white = np.full_like(bgr, 255.0)
+
+    #     composited = bgr * alpha + white * (1.0 - alpha)
+    #     return np.clip(composited, 0, 255).astype(np.uint8)
+
     @staticmethod
     def _build_metadata(is_blank: bool, confidence, comment, qr_list) -> dict:
         return {
@@ -231,7 +232,10 @@ class Preprocessing:
             "qr_codes": qr_list,
         }
 
-    def _process(self, image: np.ndarray) -> tuple[np.ndarray, dict]:
+    def _process(self, image: np.ndarray) -> PreprocessResult:
+        # # Make transparent pixels white.       
+        # image = self._transparent_to_white(image)
+
         # 1. Grayscale
         gray = self._to_grayscale(image)
 
