@@ -11,10 +11,8 @@ class RotationResult:
     script: str = "Unknown"
 
 class RotationDetector:
-    def __init__(self, config: str = '--psm 0', tesseract_path: str = None):
+    def __init__(self, config: str = '--psm 0'):
         self.config = config
-        if tesseract_path:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
     def detect(self, image) -> RotationResult:
         osd_data = pytesseract.image_to_osd(

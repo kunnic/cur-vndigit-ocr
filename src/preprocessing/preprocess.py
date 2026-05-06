@@ -8,31 +8,6 @@ from .code import CodeDetector
 from .rotate import RotationDetector
 from .geometry import *
 
-'''
-# pipeline_config = {
-#     "blank_detector": {
-#         "model_path": "models/rf_blank_v1.joblib",
-#         "threshold": 0.65,
-#         "lower": 0.01,
-#         "upper": 0.98
-#     },
-#     "code_detector": {
-#         "types": ["QRCODE", "CODE128"]
-#     },
-#     "image_preprocessor": {
-#         "gaussian_blur": {"kernel_size": (5, 5), "sigma_x": 0},
-#         "enable_deskew": True,
-#         "deskew": {"max_angle": 45},
-#         "enable_autocrop": True,
-#         "adaptive_threshold": {"max_value": 255, "block_size": 11, "c": 2},
-#         "sharpening": {
-#             "enable": True,
-#             "kernel": [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]
-#         }
-#     }
-# }
-'''
-
 @dataclass
 class PreprocessResult:
     image: np.ndarray
