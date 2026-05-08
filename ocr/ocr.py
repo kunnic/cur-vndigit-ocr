@@ -1,5 +1,6 @@
 import numpy as np
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, asdict
 from abc import ABC, abstractmethod
 from typing import overload
 
@@ -30,6 +31,18 @@ class OCRResult:
         if not self.texts or isinstance(self.texts, str):
             return 0.0
         return sum(block.confidence for block in self.texts) / len(self.texts)
+
+    def to_json(self, output_path: str = None) -> str:
+        data_dict = asdict(self)
+        data_dict['confidence'] = self.confidence
+        json_string = json.dumps(data_dict, ensure_ascii=False)
+
+        if output_path:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(json_string)
+            print(f"output -> {output_path}")
+
+        return json_string
 
     def __str__(self) -> str:
         lines = ["=" * 50]
