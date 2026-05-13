@@ -78,7 +78,7 @@ class Preprocessing:
     def __init__(self, config: dict | None = None) -> None:
         self.config = config or {}
         self.cv_cfg = self.config.get("image_preprocessor", {})
-
+    
         decide_cfg = dict(self.config.get("decide_engine", {}))
         code_cfg = self.config.get("code_detector", {})
         osd_cfg = self.config.get("tesseract", {})
