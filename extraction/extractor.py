@@ -1,65 +1,100 @@
 
 import re
 import unicodedata
+import difflib
 
 
 class DocumentExtractor:
 
     def _normalize(self, text: str) -> str:
-        """Chuyển về chữ thường, bỏ dấu, xử lý cả chữ đ/Đ"""
         text = text.lower()
         text = text.replace("đ", "d").replace("Đ", "d")
         nfkd = unicodedata.normalize("NFKD", text)
         return "".join(c for c in nfkd if not unicodedata.combining(c))
 
     def extract(self, raw_text: str, words: list = None) -> dict:
+        co_quan = ""
+        if words:
+            co_quan = self._extract_co_quan_by_position(words)
+        if not co_quan:
+            co_quan = self._extract_co_quan(raw_text)
+
         return {
-            "ten_loai_van_ban": self._extract_ten_loai(raw_text),
-            "so_van_ban":       self._extract_so_van_ban(raw_text),
-            "ngay_thang_nam":   self._extract_ngay(raw_text),
-            "co_quan_ban_hanh": self._extract_co_quan_by_position(words) if words else self._extract_co_quan(raw_text),
+            "ten_loai_van_ban": self._extract_ten_loai(raw_text)   or None,
+            "so_van_ban":       self._extract_so_van_ban(raw_text) or None,
+            "ngay_thang_nam":   self._extract_ngay(raw_text)       or None,
+            "co_quan_ban_hanh": co_quan                            or None,
         }
 
     def _extract_ten_loai(self, text: str) -> str:
-        """Tìm trong 300 ký tự đầu, so sánh không dấu"""
         header     = text[:300]
         normalized = self._normalize(header)
         keywords   = {
-            "quyet dinh": "Quyết định",
-            "bien ban":   "Biên bản",
-            "cong van":   "Công văn",
-            "nghi quyet": "Nghị quyết",
-            "thong tu":   "Thông tư",
-            "nghi dinh":  "Nghị định",
-            "don to":      "Đơn tố cáo",
-            "thong bao":   "Thông báo",
-            "ban an so":   "Bản án",
-            "chi thi":    "Chỉ thị",
-            "ban an":  "Bản án",
+            # Văn bản tòa án
+            "quyet dinh":        "Quyết định",
+            "quyen dinh":        "Quyết định",   # OCR đọc sai
+            "ban an so":         "Bản án",
+            "ban an":            "Bản án",
+            "bien ban hop":      "Biên bản họp",
+            "bien ban kiem tra": "Biên bản kiểm tra",
+            "bien ban":          "Biên bản",
+            # Văn bản hành chính
+            "cong van":          "Công văn",
+            "nghi quyet":        "Nghị quyết",
+            "nghi dinh":         "Nghị định",
+            "thong tu":          "Thông tư",
+            "thong bao":         "Thông báo",
+            "chi thi":           "Chỉ thị",
+            "ke hoach":          "Kế hoạch",
+            "bao cao":           "Báo cáo",
+            "to trinh":          "Tờ trình",
+            "hop dong":          "Hợp đồng",
+            "giay chung nhan":   "Giấy chứng nhận",
+            "giay phep":         "Giấy phép",
+            "giay uy quyen":     "Giấy ủy quyền",
+            "giay xac nhan":     "Giấy xác nhận",
+            "van ban":           "Văn bản",
+            "phuong an":         "Phương án",
+            "de an":             "Đề án",
+            "huong dan":         "Hướng dẫn",
+            # Đơn từ
+            "don khoi kien":     "Đơn khởi kiện",
+            "don khang cao":     "Đơn kháng cáo",
+            "don to cao":        "Đơn tố cáo",
+            "don to":            "Đơn tố cáo",
+            "don kieu nai":      "Đơn khiếu nại",
+            "don de nghi":       "Đơn đề nghị",
+            "don xin":           "Đơn xin",
+            "don":               "Đơn",
         }
         for key, value in keywords.items():
             if key in normalized:
                 return value
+
+        # Fuzzy fallback
+        candidates = list(keywords.keys())
+        close = difflib.get_close_matches(normalized[:50], candidates, n=1, cutoff=0.6)
+        if close:
+            return keywords[close[0]]
         return ""
 
     def _extract_so_van_ban(self, text: str) -> str:
         header   = text[:400]
         patterns = [
-            r"[Ss][ôo][t]?\s*:\s*([0-9]+\s*/[^\s,;:]+)",  
-            r"[Ss]ố[t]?\s*:\s*([0-9]+\s*/[^\s,;:]+)",      
+            r"[Ss][ôo][t]?\s*:\s*([0-9]+\s*/[^\s,;:]+)",
+            r"[Ss]ố[t]?\s*:\s*([0-9]+\s*/[^\s,;:]+)",
             r"[Ss]ố[t]?\s*:\s*([0-9]+/[^\s,;:]+)",
             r"[Ss]ố[t]?\s+([0-9]+/[^\s,;:]+)",
         ]
         for pattern in patterns:
             match = re.search(pattern, header, re.MULTILINE)
             if match:
-                # Xóa khoảng trắng thừa trong số văn bản
                 result = match.group(1).strip(".,;: ")
                 result = result.replace(" ", "")
                 return result
         return ""
+
     def _extract_ngay(self, text: str) -> str:
-        """Ngày tháng năm nhiều dạng"""
         patterns = [
             r",\s*[Nn]gày\s+(\d{1,2})\s+tháng\s+(\d{1,2})\s+năm\s+(\d{4})",
             r"[Nn]gày\s+(\d{1,2})\s+tháng\s+(\d{1,2})\s+năm\s+(\d{4})",
@@ -77,18 +112,15 @@ class DocumentExtractor:
         if not words:
             return ""
 
-        # Từ thuộc quốc hiệu — loại bỏ
         stop_words = {
-            "CỘNG", "CỌNG", "HOÀ", "HÒA", "HOA","CỘỌNG",
+            "CỘNG", "CỌNG", "HOÀ", "HÒA", "HOA", "CỘỌNG",
             "XÃ", "XA", "HỘI", "HOI", "CHỦ", "CHU",
             "NGHĨA", "NGHIA", "VIỆT", "VIET", "NAM", "NAV",
             "Độc", "độc", "DANH", "NƯỚC", "NUOC",
-            "QUYÉẾT", "QUYÉET", 
-            "VA", "VÀ",           
-            "TẠI",
-            "ĐƠN", "TÓ", "CÁO",                
+            "QUYÉẾT", "QUYÉET", "VA", "VÀ", "TẠI",
+            "ĐƠN", "TÓ", "CÁO",
             "QUYẾT", "QUYÉT", "QUYÊT", "ĐỊNH", "ĐÌNH",
-            "BẢN", "BIÊN", "BẢN", "CÔNG", "VĂN",
+            "BẢN", "BIÊN", "CÔNG", "VĂN",
             "NGHỊ", "THÔNG", "TƯ", "CHỈ", "THỊ",
         }
 
@@ -132,15 +164,30 @@ class DocumentExtractor:
         return result.strip(".,;:-'\"")
 
     def _extract_co_quan(self, text: str) -> str:
-        #Fallback dùng regex khi không có words
+        """Fallback dùng regex khi không có words"""
         patterns = [
+            # Tòa án các cấp
             r"(TÒA ÁN NHÂN \S+(?:\s+\S+){1,5})(?=\s+(?:CỘNG|Độc|độc|Với|TẠI|tại|\-))",
+            r"(TÒA ÁN NHÂN DÂN KHU VỰC\s+\S+(?:\s+\S+){1,3})",
+            r"(TÒA ÁN NHÂN DÂN CẤP CAO(?:\s+\S+){1,3})",
+            # Ủy ban nhân dân
             r"((?:ỦY BAN|UỶ BAN) NHÂN DÂN(?:\s+\S+){1,4})(?=\s+(?:Độc|độc|\-))",
             r"(UBND \S+(?: \S+)?)",
+            # Viện kiểm sát
+            r"(VIỆN KIỂM SÁT NHÂN DÂN(?:\s+\S+){1,4})",
+            r"(VIỆN KIỂM SÁT(?:\s+\S+){1,3})",
+            # Tòa án chữ thường
             r"(Tòa án nhân dân(?:\s+\S+){1,4})(?=\s+(?:[-–]|Độc|độc))",
-            r"(BỘ \S+(?: \S+)?)",
-            r"(CỤC \S+(?: \S+)?)",
-            r"(SỞ \S+(?: \S+)?)",
+            # Bộ, Cục, Sở, Chi cục, Văn phòng
+            r"(BỘ \S+(?: \S+){1,3})",
+            r"(CỤC \S+(?: \S+){1,2})",
+            r"(SỞ \S+(?: \S+){1,2})",
+            r"(CHI CỤC \S+(?: \S+){1,2})",
+            r"(VĂN PHÒNG \S+(?: \S+){1,2})",
+            # Hội đồng nhân dân
+            r"(HỘI ĐỒNG NHÂN DÂN(?:\s+\S+){1,4})",
+            # Ban
+            r"(BAN \S+(?: \S+){1,2})",
         ]
         for pattern in patterns:
             match = re.search(pattern, text)
