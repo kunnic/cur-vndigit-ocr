@@ -1,27 +1,22 @@
-from __future__ import annotations
-
-from abc import ABC, abstractmethod
+# -- built in --
 from dataclasses import dataclass
-from typing import Any, TypeAlias, overload
+from abc import ABC, abstractmethod
+from typing import overload, Generic, TypeVar, TypeAlias
 
-from .schema import CourtRecord
+# -- third party --
+from pydantic import BaseModel
+from concurrent.futures import ThreadPoolExecutor
 
-InputText: TypeAlias = str
+T = TypeVar("T", bound=BaseModel)
+TextInput: TypeAlias = str | list[str]
 
-@dataclass(frozen=True)
-class Prompt:
-    text: str
 
-    def __str__(self) -> str:
-        return self.text
-
+# ── DEFINE ─────────────────────────────────────────
 @dataclass
-class ExtractedResult:
+class ExtractorResult(Generic[T]):
+    record: T
 
-    record: CourtRecord
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return a JSON-compatible dict (``None`` for absent fields)."""
+    def to_dict(self) -> dict[str, object]:
         return self.record.model_dump()
 
     def __str__(self) -> str:
@@ -31,39 +26,37 @@ class ExtractedResult:
         return "\n".join(parts)
 
 class BaseExtractor(ABC):
-    @abstractmethod
-    def _build_prompt(self, input_text: InputText) -> Prompt: pass
-
-    @abstractmethod
-    def _extract_single(self, input_text: InputText) -> ExtractedResult: pass
-    
-    def _extract_batch(
-        self, inputs: list[InputText]
-    ) -> list[ExtractedResult]:
-        return [self._extract_single(inp) for inp in inputs]
-    
     @overload
-    def extract(self, input_text: InputText) -> ExtractedResult: ...
+    def extract(
+        self,
+        inputs: TextInput,
+        schema: type[T],
+    ) -> ExtractorResult[T]: ...
 
     @overload
-    def extract(self, input_text: list[InputText]) -> list[ExtractedResult]: ...
+    def extract(
+        self,
+        inputs: list[TextInput],
+        schema: type[T],
+    ) -> list[ExtractorResult[T]]: ...
 
     def extract(
         self,
-        input_text: InputText | list[InputText],
-    ) -> ExtractedResult | list[ExtractedResult]:
-        if isinstance(input_text, list):
-            for i, item in enumerate(input_text):
-                if not isinstance(item, str):
-                    raise TypeError(
-                        f"All inputs must be str; item at index {i} is "
-                        f"{type(item).__name__}"
-                    )
-            return self._extract_batch(input_text)
+        inputs: TextInput | list[TextInput],
+        schema: type[T],
+    ) -> ExtractorResult[T] | list[ExtractorResult[T]]:
+        if isinstance(inputs, list):
+            return self._extract_batch(inputs, schema)
+        return self._extract_single(inputs, schema)
 
-        if not isinstance(input_text, str):
-            raise TypeError(
-                f"input_text must be a str or list[str], "
-                f"got {type(input_text).__name__}"
-            )
-        return self._extract_single(input_text)
+    @abstractmethod
+    def _extract_single(self, text: TextInput, schema: type[T]) -> ExtractorResult[T]:
+        pass
+
+    def _extract_batch(
+        self, texts: list[TextInput], schema: type[T]
+    ) -> list[ExtractorResult[T]]:
+        # ML/DL models with native batch support should override this method.
+        with ThreadPoolExecutor() as executor:
+            return list(executor.map(lambda t: self._extract_single(t, schema), texts))
+# ── END ─────────────────────────────────────────
