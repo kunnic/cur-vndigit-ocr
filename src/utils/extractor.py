@@ -1,8 +1,6 @@
-
 import re
 import unicodedata
 import difflib
-
 
 class DocumentExtractor:
 
@@ -16,6 +14,9 @@ class DocumentExtractor:
         co_quan = ""
         if words:
             co_quan = self._extract_co_quan_by_position(words)
+            # Kết quả quá ngắn (< 3 từ) thì tìm tiếp ở giữa trang
+            if not co_quan or len(co_quan.split()) < 3:
+                co_quan = self._extract_co_quan_by_center(words)
         if not co_quan:
             co_quan = self._extract_co_quan(raw_text)
 
@@ -111,7 +112,6 @@ class DocumentExtractor:
     def _extract_co_quan_by_position(self, words) -> str:
         if not words:
             return ""
-
         stop_words = {
             "CỘNG", "CỌNG", "HOÀ", "HÒA", "HOA", "CỘỌNG",
             "XÃ", "XA", "HỘI", "HOI", "CHỦ", "CHU",
@@ -123,7 +123,6 @@ class DocumentExtractor:
             "BẢN", "BIÊN", "CÔNG", "VĂN",
             "NGHỊ", "THÔNG", "TƯ", "CHỈ", "THỊ",
         }
-
         max_x    = max(w.x for w in words)
         mid_x    = max_x / 2
         max_y    = max(w.y for w in words)
@@ -162,7 +161,75 @@ class DocumentExtractor:
             for line in lines
         )
         return result.strip(".,;:-'\"")
+    
+    def _extract_co_quan_by_center(self, words) -> str:
+        if not words:
+            return ""
 
+        co_quan_keywords = {"TÒA", "ỦY", "UỶ", "BỘ", "CỤC", "SỞ", "VIỆN"}
+
+        stop_words = {
+            "CỘNG", "CỌNG", "HOÀ", "HÒA", "HOA",
+            "XÃ", "XA", "HỘI", "CHỦ", "CHU",
+            "NGHĨA", "VIỆT", "NAM", "NAV",
+            "Độc", "độc", "DANH", "NƯỚC",
+            "QUYẾT", "QUYÉT", "ĐỊNH", "ĐÌNH",
+            "BẢN", "BIÊN", "CÔNG", "VĂN",
+            "NGHỊ", "THÔNG", "TƯ", "CHỈ", "THỊ",
+            "ĐƠN", "TÓ", "CÁO",
+        }
+
+        max_y    = max(w.y for w in words)
+        top_zone = max_y * 0.5  # tìm trong 50% đầu trang
+
+        # Lọc từ IN HOA, không chứa số, không có ký tự đặc biệt
+        center_words = [
+            w for w in words
+            if w.y < top_zone
+            and w.text.strip(".,;:-'\"").isupper()
+            and len(w.text.strip(".,;:-'\"")) > 1
+            and not any(c.isdigit() for c in w.text)
+            and "/" not in w.text
+            and ")" not in w.text
+            and "(" not in w.text
+            and w.text.strip(".,;:-'\"") not in stop_words
+        ]
+
+        if not center_words:
+            return ""
+
+        # Gom thành dòng
+        center_words.sort(key=lambda w: (w.y, w.x))
+        lines   = []
+        current = [center_words[0]]
+
+        for word in center_words[1:]:
+            if abs(word.y - current[0].y) < 20:
+                current.append(word)
+            else:
+                lines.append(current)
+                current = [word]
+        lines.append(current)
+
+        # Tìm dòng đầu tiên có từ khóa cơ quan
+        result_lines = []
+        for line in lines:
+            line_text = " ".join(w.text for w in sorted(line, key=lambda w: w.x))
+            if any(kw in line_text for kw in co_quan_keywords):
+                result_lines.append(line_text)
+                # Lấy thêm dòng tiếp theo nếu cũng IN HOA (tối đa 1 dòng)
+                idx = lines.index(line)
+                if idx + 1 < len(lines):
+                    next_text = " ".join(w.text for w in sorted(lines[idx+1], key=lambda w: w.x))
+                    if any(kw in next_text for kw in co_quan_keywords):
+                        result_lines.append(next_text)
+                break
+
+        if not result_lines:
+            return ""
+
+        return " ".join(result_lines).strip(".,;:-'\"")
+    
     def _extract_co_quan(self, text: str) -> str:
         """Fallback dùng regex khi không có words"""
         patterns = [
