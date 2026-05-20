@@ -43,12 +43,16 @@ class DocumentExtractor:
         if not value or not words:
             return 0.0
 
-        value_words  = value.lower().split()
-        matched_conf = []
+        import re
+        tokens = re.findall(r'[0-9]+|[A-ZĐa-zđÀ-ỹ]+', value.lower())
 
+        matched_conf = []
         for w in words:
-            if w.text.lower() in value_words:
-                matched_conf.append(w.confidence)
+            w_tokens = re.findall(r'[0-9]+|[A-ZĐa-zđÀ-ỹ]+', w.text.lower())
+            for wt in w_tokens:
+                if wt in tokens and len(wt) > 1:
+                    matched_conf.append(w.confidence)
+                    break
 
         if not matched_conf:
             return 0.0
@@ -56,11 +60,22 @@ class DocumentExtractor:
         return round(sum(matched_conf) / len(matched_conf), 4)
 
     def _find_bounding_box(self, value: str, words: list) -> dict | None:
+        """
+        Tìm bounding box của value dựa trên tọa độ các từ khớp
+        """
         if not value or not words:
             return None
 
-        value_words   = value.lower().split()
-        matched_words = [w for w in words if w.text.lower() in value_words]
+        import re
+        tokens = re.findall(r'[0-9]+|[A-ZĐa-zđÀ-ỹ]+', value.lower())
+
+        matched_words = []
+        for w in words:
+            w_tokens = re.findall(r'[0-9]+|[A-ZĐa-zđÀ-ỹ]+', w.text.lower())
+            for wt in w_tokens:
+                if wt in tokens and len(wt) > 1:
+                    matched_words.append(w)
+                    break
 
         if not matched_words:
             return None
