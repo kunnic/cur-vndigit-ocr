@@ -1,16 +1,18 @@
 from .autocorrect import AutoCorrector
 from .rule import RuleCorrector
 from .dictionary import DictionaryCorrector
-from .correction_type import Correction, CorrectionResult
+from .ngram import BigramLanguageModel
+from .correction_type import (
+    Correction,
+    CorrectionResult
+)
 
-# Export ra ngoài
+# Export modules
 __all__ = [
-    'AutoCorrector',
-    'RuleCorrector',
-    'DictionaryCorrector',
-    'Correction',
-    'CorrectionResult'
+    "AutoCorrector",
+    "RuleCorrector",
+    "DictionaryCorrector",
+    "BigramLanguageModel",
+    "Correction",
+    "CorrectionResult"
 ]
-
-
-print("Correction module loaded successfully")  
