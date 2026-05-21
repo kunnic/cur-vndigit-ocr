@@ -126,7 +126,7 @@ class CodeDetector:
         if self._types:
             symbols = [ZBarSymbol[t] for t in self._types]
 
-        results = decode(image, symbols=symbols) if symbols else decode(image)
+        results = decode(image = image, symbols = symbols) if symbols else decode(image)
         parsed = [self._parse(r) for r in results]
 
         if self.config["dedupe_by_content"]:
