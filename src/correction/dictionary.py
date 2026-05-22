@@ -91,7 +91,7 @@ class DictionaryCorrector:
         # Bigram reranking
         best_candidate = self.ngram_model.rank_candidates(next_word=next_word, candidates=candidates)
 
-        if best_candidate:
+        if best_candidate and best_candidate != word:
             return best_candidate
 
         return word

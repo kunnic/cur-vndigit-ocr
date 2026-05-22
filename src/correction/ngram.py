@@ -40,21 +40,10 @@ class BigramLanguageModel:
             if score > best_score:
                 best_score = score
                 best_candidate = candidate
+        if best_score == 0:
+            return None
         return best_candidate
     
 model = BigramLanguageModel()
 model.load_corpus("data/corpus.txt")
 print(f"Tổng số cặp từ (Bigrams) học được: {len(model.bigram_counts)}")
-
-# candidates = [
-#     "hợp",
-#     "hộp",
-#     "hớp"
-# ]
-
-# best = model.rank_candidates(
-#     next_word="đồng",
-#     candidates=candidates
-# )
-
-# print("BEST =", best)
