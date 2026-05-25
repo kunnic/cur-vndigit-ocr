@@ -12,8 +12,8 @@ from ocr.tesseract import TesseractOCR
 from ocr.paddle import Paddle
 
 
-IMAGE_PATH = "/app/data/input/preprocess/images/0074.png"
-OUTPUT_DIR = Path("/app/temp")
+IMAGE_PATH = "data/input/43.png"
+OUTPUT_DIR = Path("output")
 OCR_ENGINE = "paddle"   # "tesseract" | "paddle"
 
 
@@ -51,7 +51,12 @@ def main() -> None:
             "preprocessing": {
                 "decide_engine": {"provider": None}
             },
-            "postprocessing": {}
+            "postprocessing": {
+                "autocorrect": {
+                    "enabled": True,
+                    "min_confidence": 0.7
+                }
+            }
         },
     )
 

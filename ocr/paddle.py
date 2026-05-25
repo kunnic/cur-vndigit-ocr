@@ -15,9 +15,11 @@ from .ocr import BaseOCR, OCRResult, TextBlock
 
 DEFAULT_PADDLE_CONFIG: dict = {
     "engine": {
-        "lang": "en",
+        # "lang": "en",
+        "lang": "vi",
         "device": "cpu",
-        "ocr_version": "PP-OCRv5",
+        # "ocr_version": "PP-OCRv5",
+        "ocr_version": "PP-OCRv4",
         "use_textline_orientation": False,
         "use_doc_orientation_classify": False,
         "use_doc_unwarping": False,
@@ -69,9 +71,11 @@ def _deep_merge(base: dict, override: dict | None) -> dict:
 
 @dataclass
 class PaddleParams:
-    lang: str = "en"
+    # lang: str = "en"
+    lang: str = "vi"
     device: str = "cpu"
-    ocr_version: str = "PP-OCRv5"
+    # ocr_version: str = "PP-OCRv5"
+    ocr_version: str = "PP-OCRv4"
 
     use_textline_orientation: bool = False
     use_doc_orientation_classify: bool = False
@@ -195,62 +199,101 @@ class Paddle(BaseOCR):
 
         return image
 
-    def _parse_result(self, raw: Any) -> OCRResult:
-        parse_cfg = self.config["parse"]
+    # def _parse_result(self, raw: Any) -> OCRResult:
+    #     parse_cfg = self.config["parse"]
 
+    #     if not raw:
+    #         return OCRResult(texts=[])
+
+    #     blocks: list[TextBlock] = []
+
+    #     for res in raw:
+    #         data = getattr(res, "json", {}).get(
+    #             parse_cfg["result_root_key"], {}
+    #         )
+
+    #         rec_texts = data.get(parse_cfg["texts_key"], []) or []
+    #         rec_scores = data.get(parse_cfg["scores_key"], []) or []
+    #         dt_polys = data.get(parse_cfg["polys_key"], []) or []
+
+    #         if (
+    #             parse_cfg.get("fallback_empty_polygon", True)
+    #             and not dt_polys
+    #             and rec_texts
+    #         ):
+    #             dt_polys = [[] for _ in rec_texts]
+
+    #         for text, conf, poly in zip(rec_texts, rec_scores, dt_polys):
+    #             normalized_text = (
+    #                 text.strip()
+    #                 if parse_cfg.get("strip_text", True) and isinstance(text, str)
+    #                 else text
+    #             )
+
+    #             if (
+    #                 parse_cfg.get("skip_empty_text", True)
+    #                 and (not normalized_text or str(normalized_text).strip() == "")
+    #             ):
+    #                 continue
+
+    #             if parse_cfg["polygon_cast_int"] and poly:
+    #                 polygon = [
+    #                     (int(p[0]), int(p[1])) for p in poly
+    #                 ]
+    #             else:
+    #                 polygon = [
+    #                     (p[0], p[1]) for p in poly
+    #                 ] if poly else []
+
+    #             confidence = float(conf) * float(
+    #                 parse_cfg["confidence_scale"]
+    #             )
+
+    #             block = TextBlock(
+    #                 text=str(normalized_text),
+    #                 bounding_polygon=polygon,
+    #                 confidence=confidence,
+    #             )
+    #             blocks.append(block)
+
+    #     return OCRResult(texts=blocks)
+
+    def _parse_result(self, raw: Any) -> OCRResult:
         if not raw:
             return OCRResult(texts=[])
 
         blocks: list[TextBlock] = []
 
-        for res in raw:
-            data = getattr(res, "json", {}).get(
-                parse_cfg["result_root_key"], {}
-            )
+        try:
+            lines = raw[0]
 
-            rec_texts = data.get(parse_cfg["texts_key"], []) or []
-            rec_scores = data.get(parse_cfg["scores_key"], []) or []
-            dt_polys = data.get(parse_cfg["polys_key"], []) or []
-
-            if (
-                parse_cfg.get("fallback_empty_polygon", True)
-                and not dt_polys
-                and rec_texts
-            ):
-                dt_polys = [[] for _ in rec_texts]
-
-            for text, conf, poly in zip(rec_texts, rec_scores, dt_polys):
-                normalized_text = (
-                    text.strip()
-                    if parse_cfg.get("strip_text", True) and isinstance(text, str)
-                    else text
-                )
-
-                if (
-                    parse_cfg.get("skip_empty_text", True)
-                    and (not normalized_text or str(normalized_text).strip() == "")
-                ):
+            for line in lines:
+                if not line or len(line) < 2:
                     continue
 
-                if parse_cfg["polygon_cast_int"] and poly:
-                    polygon = [
-                        (int(p[0]), int(p[1])) for p in poly
-                    ]
-                else:
-                    polygon = [
-                        (p[0], p[1]) for p in poly
-                    ] if poly else []
+                polygon = line[0]
+                text = line[1][0]
+                confidence = float(line[1][1])
 
-                confidence = float(conf) * float(
-                    parse_cfg["confidence_scale"]
+                if not text or str(text).strip() == "":
+                    continue
+
+                polygon = [
+                    (int(point[0]), int(point[1]))
+                    for point in polygon
+                ]
+
+                blocks.append(
+                    TextBlock(
+                        text=str(text).strip(),
+                        bounding_polygon=polygon,
+                        confidence=confidence,
+                    )
                 )
 
-                block = TextBlock(
-                    text=str(normalized_text),
-                    bounding_polygon=polygon,
-                    confidence=confidence,
-                )
-                blocks.append(block)
+        except Exception as e:
+            self._warn(f"Parse OCR result failed: {e}")
+            return OCRResult(texts=[])
 
         return OCRResult(texts=blocks)
 
@@ -260,7 +303,8 @@ class Paddle(BaseOCR):
 
         try:
             rgb = self._to_rgb(image)
-            raw = self.model._engine.predict(rgb)
+            # raw = self.model._engine.predict(rgb)
+            raw = self.model._engine.ocr(rgb, cls=True)
             return self._parse_result(raw)
         except Exception as exc:
             return self._handle_runtime_error(exc)

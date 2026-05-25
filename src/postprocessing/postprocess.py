@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Union
-
+from src.utils.extracting.correction.autocorrect import AutoCorrector
 from ocr.ocr import OCRResult, TextBlock
 
 # @dataclass
@@ -12,6 +12,8 @@ from ocr.ocr import OCRResult, TextBlock
 class Postprocessing:  
     def __init__(self, config: dict = None):
         self.config = config if config is not None else {}
+        correction_config = self.config.get("autocorrect", {})
+        self.corrector = AutoCorrector(correction_config)
 
     def _merge_lines(
             self, 
@@ -81,4 +83,22 @@ class Postprocessing:
         return OCRResult(texts = merged_blocks)
 
     def process(self, raw_blocks: OCRResult) -> OCRResult:
-        return self._merge_lines(raw_blocks.texts)
+        merged_result = self._merge_lines(raw_blocks.texts)
+        corrected_result = self.corrector.correct_ocr_result(merged_result)
+
+        print("\n=== BEFORE CORRECTION ===")
+        for text in corrected_result.original_texts:
+            print(text)
+        
+        print("\n=== AFTER CORRECTION ===")
+        for text in corrected_result.corrected_texts:
+            print(text)
+
+        corrected_blocks = []
+
+        for block, corrected_text in zip(merged_result.texts, corrected_result.corrected_texts):
+            # block.text = corrected_text
+            corrected_blocks.append(TextBlock(text=corrected_text, bounding_polygon=block.bounding_polygon, confidence=block.confidence))
+
+        merged_result.texts = corrected_blocks
+        return merged_result
