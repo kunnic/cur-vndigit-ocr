@@ -1,12 +1,4 @@
-import sys
-from pathlib import Path
 from typing import List, Union, Optional
-
-# Fix path
-root_dir = Path(__file__).resolve().parent.parent.parent
-if str(root_dir) not in sys.path:
-    sys.path.append(str(root_dir))
-
 from .correction_type import Correction, CorrectionResult
 from .rule import RuleCorrector
 from .dictionary import DictionaryCorrector
@@ -30,8 +22,10 @@ class AutoCorrector:
         """Sửa lỗi cho 1 đoạn text duy nhất"""
         if not self.enabled or not text:
             return text
+        
         texts = [text]
         result = self.correct_list(texts)
+
         return result.corrected_texts[0]
 
     def correct_list(self, texts: List[str], confidences: List[float] = None) -> CorrectionResult:
@@ -63,15 +57,18 @@ class AutoCorrector:
         )
 
     def correct_ocr_result(self, ocr_result) -> CorrectionResult:
-        """Hỗ trợ OCRResult (nếu bạn muốn dùng)"""
+        """Hỗ trợ OCRResult"""
+        confidences = None
         if hasattr(ocr_result, 'texts'):
             if isinstance(ocr_result.texts, str):
                 texts = [ocr_result.texts]
             else:
                 texts = [block.text for block in ocr_result.texts]
+                confidences = [block.confidence for block in ocr_result.texts]
         else:
             texts = [str(ocr_result)]
 
-        result = self.correct_list(texts)
+        result = self.correct_list(texts, confidences)
         result.ocr_result = ocr_result  # lưu tham chiếu gốc
         return result
+        
