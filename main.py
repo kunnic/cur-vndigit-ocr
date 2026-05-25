@@ -1,67 +1,43 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import cv2
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from src.preprocessing.preprocess import Preprocessing
+from digitize import Digitize
 from ocr.tesseract import TesseractOCR
+from ocr.paddle import Paddle
 
 
 IMAGE_PATH = "/app/data/input/preprocess/images/0074.png"
+OUTPUT_DIR = Path("/app/temp")
+OCR_ENGINE = "paddle"   # "tesseract" | "paddle"
 
 
-def show_image(image):
+def save_image(image, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     plt.figure(figsize=(10, 10))
     plt.imshow(
         image if image.ndim == 2 else cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
         cmap="gray" if image.ndim == 2 else None,
     )
     plt.axis("off")
-    plt.show()
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
 
 
-def run_preprocess(img):
-    pp = Preprocessing({
-        "decide_engine": {"provider": None}
-    })
-
-    result = pp.process(img)
-
-    print("=== PREPROCESS METADATA ===")
-    print(result.metadata)
-    print("=== PREPROCESS RESULT ===")
-    print(result)
-
-    return result
+def build_ocr():
+    if OCR_ENGINE == "paddle":
+        return Paddle()
+    return TesseractOCR()
 
 
-def run_tesseract(img):
-    ocr = TesseractOCR()
-    ocr_result = ocr.recognize(img)
-
-    print("=== TESSERACT RESULT ===")
-    print(ocr_result)
-
-    return ocr_result
-
-
-def run_paddle(img):
-    try:
-        from ocr.paddle import Paddle
-
-        paddle_ocr = Paddle()
-        paddle_result = paddle_ocr.recognize(img)
-
-        print("=== PADDLE RESULT ===")
-        print(paddle_result)
-
-        return paddle_result
-    except Exception as e:
-        print("PaddleOCR failed, falling back to Tesseract:", e)
-        return None
-
-
-def main():
+def main() -> None:
     img = cv2.imread(IMAGE_PATH)
     if img is None:
         raise FileNotFoundError(f"Cannot read image: {IMAGE_PATH}")
@@ -69,13 +45,31 @@ def main():
     print(f"Loaded image: {IMAGE_PATH}")
     print(f"Image shape: {img.shape}")
 
-    preprocess_result = run_preprocess(img)
+    digitizer = Digitize(
+        ocr=build_ocr(),
+        config={
+            "preprocessing": {
+                "decide_engine": {"provider": None}
+            },
+            "postprocessing": {}
+        },
+    )
 
-    print("=== SHOW PREPROCESSED IMAGE ===")
-    show_image(preprocess_result.image)
+    result = digitizer.digitize(img)
 
-    _ = run_tesseract(img)
-    _ = run_paddle(img)
+    print("=== DIGITIZE RESULT ===")
+    print("=== PREPROCESS RESULT ===")
+    print(result.preprocess)
+
+    print("=== PREPROCESS METADATA ===")
+    print(result.preprocess.metadata)
+
+    print("=== OCR RESULT ===")
+    print(result.ocr)
+
+    output_path = OUTPUT_DIR / "preprocessed.png"
+    save_image(result.image, output_path)
+    print(f"Saved preprocessed image to: {output_path}")
 
 
 if __name__ == "__main__":
