@@ -75,8 +75,8 @@ class OCRCoreConfig:
         if repr_cfg["header_width"] <= 0:
             raise ValueError("string_repr.header_width must be > 0")
 
-
-@dataclass(frozen=True)
+# @dataclass(frozen=True)
+@dataclass()
 class TextBlock:
     text: str
     bounding_polygon: list[tuple[int, int]]
@@ -130,7 +130,8 @@ class TextBlock:
         return " ".join(parts)
 
 
-@dataclass(frozen=True)
+# @dataclass(frozen=True)
+@dataclass()
 class OCRResult:
     texts: list[TextBlock] | str
 
