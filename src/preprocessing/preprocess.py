@@ -1,16 +1,16 @@
-from __future__     import annotations
+from __future__ import annotations
 
-from collections    import deque
-from dataclasses    import dataclass, field
-from typing         import Callable, Any
+from collections import deque
+from dataclasses import dataclass, field
+from typing import Callable
 
 import cv2
 import numpy as np
 
-from .code          import CodeDetector
-from .decide        import DecisionEngine, DecisionResult, LABEL_SKIP, LABEL_CLEAN
-from .rotate        import RotationDetector
-from .geometry      import detect_document, four_point_transform
+from .code import CodeDetector
+from .decide import DecisionEngine, DecisionResult, LABEL_CLEAN, LABEL_SKIP
+from .geometry import detect_document, four_point_transform
+from .rotate import RotationDetector
 
 
 DEFAULT_PREPROCESS_CONFIG: dict = {
@@ -106,7 +106,7 @@ class PreprocessResult:
     decision: DecisionResult | None = field(default=None, repr=False)
 
     def __str__(self) -> str:
-        parts = []
+        parts: list[str] = []
 
         parts.append("IMAGE")
         if self.image is not None:
@@ -119,7 +119,7 @@ class PreprocessResult:
             parts.append(" None")
 
         parts.append("\nDECISION")
-        if self.decision:
+        if self.decision is not None:
             parts.append(f" label : {self.decision.label_name}")
             parts.append(f" confidence : {self.decision.confidence:.4f}")
             parts.append(f" recipe : {self.decision.recipe}")
@@ -142,7 +142,6 @@ class PreprocessResult:
             parts.append("\nQR OBJECTS")
             for i, qr in enumerate(qr_codes, 1):
                 parts.append(f" [{i}]")
-
                 if hasattr(qr, "__dict__"):
                     data = qr.__dict__
                 elif hasattr(qr, "__slots__"):
@@ -285,6 +284,9 @@ class Preprocessing:
             )
         return image.copy()
 
+    def _orient(self, image: np.ndarray) -> np.ndarray:
+        return self.rotation_detector._orient(image)
+
     def _denoise(self, image: np.ndarray) -> np.ndarray:
         cfg = self.cv_cfg["gaussian_blur"]
         if not cfg.get("enabled", True):
@@ -355,7 +357,7 @@ class Preprocessing:
         if w * h < cfg["min_area_ratio"] * gray.shape[0] * gray.shape[1]:
             return gray
 
-        return gray[y : y + h, x : x + w]
+        return gray[y:y + h, x:x + w]
 
     def _adaptive_threshold(self, image: np.ndarray) -> np.ndarray:
         cfg = self.cv_cfg["adaptive_threshold"]
@@ -386,88 +388,76 @@ class Preprocessing:
 
         resize_height = cfg["resize_height"]
         ratio = image.shape[0] / float(resize_height)
+        resize_width = int(image.shape[1] / ratio)
 
         image_small = cv2.resize(
             image,
-            (int(image.shape[1] / ratio), resize_height),
+            (resize_width, resize_height),
             interpolation=self._resolve_cv2_constant(cfg["resize_interpolation"]),
         )
 
-        doc_cnt = detect_document(image_small, config=self.geo_cfg)
-
+        doc_cnt = detect_document(image_small)
         if doc_cnt is None:
-            if self.cv_cfg.get("warn_on_perspective_skip", True):
-                self._warn(
-                    "WARN [perspective_correct] no document contour found -> skipping."
-                )
-
             if cfg["on_document_not_found"] == "raise":
-                raise ValueError("No document contour found for perspective correction.")
-
+                raise ValueError("Document contour not found for perspective correction.")
+            if self.cv_cfg.get("warn_on_perspective_skip", True):
+                self._warn("Perspective correction skipped: document not found.")
             return image
 
         doc_cnt = doc_cnt.reshape(4, 2) * ratio
-        return four_point_transform(image, doc_cnt, config=self.geo_cfg)
-
-    def _orient(self, image: np.ndarray) -> np.ndarray:
-        return self.rotation_detector.correct(image)
+        return four_point_transform(image, doc_cnt)
 
     def _qr_detect(self, image: np.ndarray) -> np.ndarray:
-        self._qr_buffer.extend(self.code_detector.detect(image))
+        self._qr_buffer = self.code_detector.detect(image)
         return image
 
-    def _run_step(self, step: str, current: np.ndarray) -> np.ndarray:
-        func = self.step_menu.get(step)
-        if func is not None:
-            return func(current)
+    def _apply_recipe(
+        self,
+        image: np.ndarray,
+        recipe: str | None,
+    ) -> np.ndarray:
+        steps = self._split_recipe(recipe)
+        current = image
 
-        message = f"WARN [Preprocessing] unknown step '{step}' -> skipping."
-        if self.cv_cfg["unknown_step_policy"] == "raise":
-            raise ValueError(message)
+        while steps:
+            step = steps.popleft()
+            fn = self.step_menu.get(step)
 
-        if self.cv_cfg.get("warn_on_unknown_step", True):
-            self._warn(message)
+            if fn is None:
+                message = f"Unknown preprocessing step: {step}"
+                if self.cv_cfg.get("warn_on_unknown_step", True):
+                    self._warn(message)
+
+                if self.cv_cfg["unknown_step_policy"] == "raise":
+                    raise ValueError(message)
+                continue
+
+            current = fn(current)
 
         return current
 
     def process(self, image: np.ndarray) -> PreprocessResult:
-        self._qr_buffer = []
-
         if image is None or getattr(image, "size", 0) == 0:
             handled = self._handle_empty_image(image)
             return PreprocessResult(
-                image    = handled,
-                metadata = self._build_metadata(
-                    self.cv_cfg["status_map"]["skip"],
-                    [],
-                ),
-                decision = None,
-            )
-
-        decision = self.engine.evaluate(image)
-
-        if decision.label == LABEL_SKIP:
-            return PreprocessResult(
-                image=image,
+                image=handled,
                 metadata=self._build_metadata(
-                    self._status_from_decision(decision),
-                    [],
+                    status=self.cv_cfg["status_map"]["skip"],
+                    qr_list=[],
                 ),
-                decision=decision,
+                decision=None,
             )
 
-        current = image.copy() if self.cv_cfg.get("copy_input_image", True) else image
-        step_queue = self._split_recipe(decision.recipe)
+        working = image.copy() if self.cv_cfg.get("copy_input_image", True) else image
 
-        while step_queue:
-            step = step_queue.popleft()
-            current = self._run_step(step, current)
+        decision = self.engine.decide(working)
+        status = self._status_from_decision(decision)
+
+        processed = self._apply_recipe(working, decision.recipe)
+        metadata = self._build_metadata(status=status, qr_list=self._qr_buffer)
 
         return PreprocessResult(
-            image    = current,
-            metadata = self._build_metadata(
-                self._status_from_decision(decision),
-                self._qr_buffer,
-            ),
-            decision =decision,
+            image=processed,
+            metadata=metadata,
+            decision=decision,
         )

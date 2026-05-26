@@ -1,4 +1,8 @@
 # VN-Digitize-Comprehensive-System-_-Team-03
+<<<<<<< HEAD
+link đến dataset: [https://drive.google.com/drive/folders/1sXXs4bnBljA0i95X0opNlANrDwo6HfJp?usp=drive_link](https://drive.google.com/drive/folders/1ineDU5p1QoUdfVlugh5Ot-FIAySs1co1?usp=sharing)
+
+=======
 
 TO-DO
 
@@ -13,6 +17,10 @@ TO-DO
         + Pipeline?
     + OCRResult
         + What should it contain, how should text be stored.
+<<<<<<< HEAD
+>>>>>>> main
+=======
 
 
 pull tragery
+>>>>>>> fe2f310f223f6f7bc24c8ffe46bf75500df9bbc7
