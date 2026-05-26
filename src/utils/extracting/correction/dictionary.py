@@ -26,7 +26,9 @@ class DictionaryCorrector:
         self._load_dictionary()
         self.ngram_model = BigramLanguageModel()
 
-        corpus_path = root_dir / "data" / "corpus.txt"
+        current_file = Path(__file__).resolve()
+        root_dir = current_file.parents[4]
+        corpus_path = root_dir / "dictionary" / "corpus.txt"
 
         if corpus_path.exists():
             self.ngram_model.load_corpus(str(corpus_path))
@@ -42,8 +44,11 @@ class DictionaryCorrector:
             self.Verbosity = Verbosity
             self.sym_spell = SymSpell(max_dictionary_edit_distance=1, prefix_length=7)
             
-            # Thử load từ điển tiếng Việt (bạn cần chuẩn bị file này)
+            # đường dẫn file vi_VN.txt
+            current_file = Path(__file__).resolve()
+            root_dir = current_file.parents[4]
             dict_path = root_dir / "dictionary" / "vi_VN.txt"
+            
             if dict_path.exists():
                 self.sym_spell.load_dictionary(str(dict_path), term_index=0, count_index=1, encoding="utf-8")
             else:
