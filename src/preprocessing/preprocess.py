@@ -7,10 +7,10 @@ from typing import Callable
 import cv2
 import numpy as np
 
-from .code import CodeDetector
-from .decide import DecisionEngine, DecisionResult, LABEL_CLEAN, LABEL_SKIP
-from .geometry import detect_document, four_point_transform
-from .rotate import RotationDetector
+from code import CodeDetector
+from decide import DecisionEngine, DecisionResult, LABEL_CLEAN, LABEL_SKIP
+from geometry import detect_document, four_point_transform
+from rotate import RotationDetector
 
 
 DEFAULT_PREPROCESS_CONFIG: dict = {
@@ -285,7 +285,7 @@ class Preprocessing:
         return image.copy()
 
     def _orient(self, image: np.ndarray) -> np.ndarray:
-        return self.rotation_detector._orient(image)
+        return self.rotation_detector.correct(image)
 
     def _denoise(self, image: np.ndarray) -> np.ndarray:
         cfg = self.cv_cfg["gaussian_blur"]
@@ -450,7 +450,7 @@ class Preprocessing:
 
         working = image.copy() if self.cv_cfg.get("copy_input_image", True) else image
 
-        decision = self.engine.decide(working)
+        decision = self.engine.evaluate(working)
         status = self._status_from_decision(decision)
 
         processed = self._apply_recipe(working, decision.recipe)
