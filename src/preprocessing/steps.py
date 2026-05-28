@@ -1,11 +1,11 @@
-from __future__ import annotations
+from __future__     import annotations
 
 import cv2
 import numpy as np
 
 from .code_detector import CodeDetector
-from .geometry import detect_document, four_point_transform
-from .rotate import RotationDetector
+from .geometry      import detect_document, four_point_transform
+from .rotate        import RotationDetector
 
 
 rotation_detector = RotationDetector()
@@ -43,8 +43,8 @@ def deskew(gray: np.ndarray) -> np.ndarray:
         gray,
         matrix,
         (width, height),
-        flags=cv2.INTER_CUBIC,
-        borderMode=cv2.BORDER_REPLICATE,
+        flags = cv2.INTER_CUBIC,
+        borderMode = cv2.BORDER_REPLICATE,
     )
 
 
