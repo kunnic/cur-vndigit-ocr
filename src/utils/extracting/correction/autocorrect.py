@@ -59,12 +59,11 @@ class AutoCorrector:
     def correct_ocr_result(self, ocr_result) -> CorrectionResult:
         """Hỗ trợ OCRResult"""
         confidences = None
-        if hasattr(ocr_result, 'texts'):
-            if isinstance(ocr_result.texts, str):
-                texts = [ocr_result.texts]
-            else:
-                texts = [block.text for block in ocr_result.texts]
-                confidences = [block.confidence for block in ocr_result.texts]
+        if hasattr(ocr_result, 'words') and ocr_result.words:
+            texts = [word.text for word in ocr_result.words]
+            confidences = [word.confidence for word in ocr_result.words]
+        elif hasattr(ocr_result, 'raw_text') and ocr_result.raw_text:
+            texts = [ocr_result.raw_text]
         else:
             texts = [str(ocr_result)]
 

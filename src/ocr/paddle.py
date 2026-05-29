@@ -47,39 +47,90 @@ class PaddleTextRecognizer(BaseOCR):
         return image
 
     @staticmethod
-    def _parse_result(raw: Any) -> OCRBlockResult:
-        if not raw or not isinstance(raw, list) or not raw[0]:
+    def _parse_polygon(raw_poly: Any) -> list[tuple[int, int]]:
+        if raw_poly is None:
+            return []
+        try:
+            if hasattr(raw_poly, 'tolist'):
+                raw_poly = raw_poly.tolist()
+            return [(int(p[0]), int(p[1])) for p in raw_poly]
+        except (TypeError, ValueError, IndexError):
+            return []
+
+    @classmethod
+    def _parse_v5_result(cls, result: Any) -> OCRBlockResult:
+        texts = getattr(result, 'rec_texts', None) or result.get('rec_texts', [])
+        scores = getattr(result, 'rec_scores', None) or result.get('rec_scores', [])
+        polys = getattr(result, 'dt_polys', None) or result.get('dt_polys', [])
+
+        if not texts:
+            return OCRBlockResult(blocks=[])
+
+        blocks: list[TextBlock] = []
+        for i, text in enumerate(texts):
+            text = str(text).strip()
+            if not text:
+                continue
+
+            try:
+                confidence = float(scores[i]) if i < len(scores) else 0.0
+            except (TypeError, ValueError):
+                confidence = 0.0
+
+            polygon = cls._parse_polygon(polys[i]) if i < len(polys) else []
+
+            blocks.append(TextBlock(text=text, polygon=polygon, confidence=confidence))
+
+        return OCRBlockResult(blocks=blocks)
+
+    @classmethod
+    def _parse_legacy_result(cls, raw: list) -> OCRBlockResult:
+        if not raw or not isinstance(raw[0], list) or not raw[0]:
             return OCRBlockResult(blocks=[])
 
         blocks: list[TextBlock] = []
         for line in raw[0]:
-            if not line or len(line) < 2:
+            if not isinstance(line, (list, tuple)) or len(line) < 2:
                 continue
 
-            polygon = line[0]
+            polygon_raw = line[0]
             text_data = line[1]
 
-            if isinstance(text_data, (tuple, list)) and len(text_data) == 2:
+            if isinstance(text_data, (tuple, list)) and len(text_data) >= 2:
                 text = str(text_data[0]).strip()
-                confidence = float(text_data[1])
+                try:
+                    confidence = float(text_data[1])
+                except (TypeError, ValueError):
+                    confidence = 0.0
             elif isinstance(text_data, str):
                 text = text_data.strip()
-                confidence = float(line[2]) if len(line) > 2 else 0.0
+                try:
+                    confidence = float(line[2]) if len(line) > 2 else 0.0
+                except (TypeError, ValueError):
+                    confidence = 0.0
             else:
                 continue
 
             if not text:
                 continue
 
-            blocks.append(
-                TextBlock(
-                    text=text,
-                    polygon=[(int(point[0]), int(point[1])) for point in polygon],
-                    confidence=confidence,
-                )
-            )
+            polygon = cls._parse_polygon(polygon_raw)
+            blocks.append(TextBlock(text=text, polygon=polygon, confidence=confidence))
 
         return OCRBlockResult(blocks=blocks)
+
+    @classmethod
+    def _parse_result(cls, raw: Any) -> OCRBlockResult:
+        if not raw:
+            return OCRBlockResult(blocks=[])
+
+        if isinstance(raw, list) and raw:
+            first = raw[0]
+            if hasattr(first, 'rec_texts') or (isinstance(first, dict) and 'rec_texts' in first):
+                return cls._parse_v5_result(first)
+            return cls._parse_legacy_result(raw)
+
+        return OCRBlockResult(blocks=[])
 
     def _recognize_single(self, image: np.ndarray) -> OCRBlockResult:
         if image is None or getattr(image, "size", 0) == 0:

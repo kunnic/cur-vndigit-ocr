@@ -55,9 +55,6 @@ def main() -> None:
                 "enabled": True,
                 "min_confidence": 0.7,
             },
-            "extraction": {
-                "enabled": False,
-            },
         },
     )
 
