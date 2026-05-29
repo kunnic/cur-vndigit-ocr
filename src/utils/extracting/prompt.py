@@ -53,10 +53,7 @@ def build_prompt(
     max_chars: int = 3000,
     max_chars_retry: int = 1500,
 ) -> str:
-    """
-    Thay thế Prompt.build() — trả về str thay vì Prompt object.
-    Thêm multipage hint và content_page_hint khi retry.
-    """
+
     max_c = max_chars_retry if retry else max_chars
     text  = smart_truncate(raw_text, max_c)
 
@@ -95,7 +92,6 @@ def build_prompt(
     )
 
 
-# Giữ lại class Prompt để tương thích ngược với code cũ dùng Prompt.build()
 @dataclass(frozen=True)
 class Prompt:
     text: str

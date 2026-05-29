@@ -1,15 +1,3 @@
-"""
-scoring.py — Chấm điểm độ tin cậy (confidence) cho từng field trích xuất.
-
-Tách ra từ notebook để:
-  - Dễ unit-test độc lập với LLM.
-  - Dễ tuning rule per-schema mà không đụng vào extractor.
-  - Dễ mở rộng thêm rule mới (regex, cross-validate, business logic).
-
-Export chính:
-  compute_field_confidence(value, field_name) → float
-  score_extraction(extracted_dict, schema_class, threshold) → (metadata_list, overall, fill_rate)
-"""
 
 from __future__ import annotations
 
@@ -22,7 +10,6 @@ from pydantic import BaseModel
 # ══════════════════════════════════════════════════════════════════════════════
 # PATTERN LIBRARY
 # ══════════════════════════════════════════════════════════════════════════════
-# Thêm vào phần PATTERN LIBRARY (thay thế các _RE_ cũ):
 
 _RE_SO_HIEU  = re.compile(
     r"^\d{1,4}"
@@ -146,9 +133,7 @@ def score_extraction(
     schema_class: Type[BaseModel],
     low_conf_threshold: float = 0.65,
 ) -> Tuple[List[dict], float, float]:
-    """
-    Phiên bản cập nhật: thêm _normalize_value trước khi tính confidence.
-    """
+
     metadata_list: List[dict] = []
     confs: List[float] = []
 

@@ -1,4 +1,3 @@
-# -- built-in --
 import os
 import re
 import json
@@ -9,14 +8,12 @@ import logging
 from dataclasses import dataclass
 from typing import Optional, Type, Tuple, Any, List, Dict
 
-# -- third-party --
 from google import genai
 from google.genai import types
 from json_repair import repair_json
 from pydantic import BaseModel
 from tqdm.auto import tqdm
 
-# -- internal --
 from .base import ExtractorResult, BaseExtractor, TextInput, T
 from .prompt import Prompt
 from .schema import auto_detect_schema, SCHEMA_REGISTRY
@@ -25,7 +22,6 @@ from .scoring import score_extraction
 logger = logging.getLogger(__name__)
 
 
-# ── CONFIG ────────────────────────────────────────────────────────────────────
 @dataclass
 class GeminiParams:
     model_name: str = "gemini-2.0-flash"
@@ -41,9 +37,7 @@ class GeminiParams:
     low_confidence_threshold: float = 0.65
 
 
-# ── UTILS ─────────────────────────────────────────────────────────────────────
 def clean_and_parse(raw: str, doc_id: str = "") -> Optional[dict]:
-    """Parse JSON từ raw LLM output, tự sửa lỗi nếu cần."""
     raw = raw.strip()
     m = re.search(r"```(?:json)?\s*([\s\S]+?)```", raw)
     candidate = m.group(1).strip() if m else raw
@@ -103,7 +97,6 @@ def _build_result(
     raw_output: str,
     low_conf_threshold: float,
 ) -> ExtractorResult:
-    """Parse raw LLM output → ExtractorResult."""
     parsed = clean_and_parse(raw_output, doc_id)
     if not parsed:
         return ExtractorResult(
@@ -131,15 +124,7 @@ def _build_result(
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GeminiExtractor
-# ══════════════════════════════════════════════════════════════════════════════
 class GeminiExtractor(BaseExtractor):
-    """
-    Extractor dùng Gemini API, hỗ trợ 2 chế độ:
-      - Direct (sync):  extract() / _extract_single()
-      - Batch (async):  submit_batch_jobs() → collect_batch_jobs()
-    """
 
     def __init__(self, api_key: str, params: Optional[GeminiParams] = None):
         self.params = params or GeminiParams()
@@ -154,7 +139,6 @@ class GeminiExtractor(BaseExtractor):
             f"batch_size={self.params.batch_size}"
         )
 
-    # ── 1. Direct (sync) ──────────────────────────────────────────────────────
     def _extract_single(self, text: str, schema: Optional[Type[T]] = None) -> ExtractorResult[T]:
         doc_id = f"doc_{uuid.uuid4().hex[:8]}"
 
@@ -197,9 +181,7 @@ class GeminiExtractor(BaseExtractor):
             raw_output_sample=last_raw[:300],
         )
 
-    # ── 2. Batch (blocking) ───────────────────────────────────────────────────
     def _extract_batch(self, texts: List[str], schema: Optional[Type[T]] = None) -> List[ExtractorResult[T]]:
-        """Wrapper: list[str] → run_batch_pipeline → list[ExtractorResult]."""
         docs = [{"document_id": f"doc_{i}", "text": t} for i, t in enumerate(texts)]
         if schema is not None:
             for d in docs:
@@ -207,10 +189,6 @@ class GeminiExtractor(BaseExtractor):
         return [self._dict_to_result(r) for r in self.run_batch_pipeline(docs)]
 
     def run_batch_pipeline(self, documents: List[dict]) -> List[dict]:
-        """
-        Submit tất cả batches → poll → collect kết quả.
-        Trả về list[dict] theo chuẩn API Contract.
-        """
         n_batches = math.ceil(len(documents) / self.params.batch_size)
         logger.info(f"Tổng {len(documents)} doc → {n_batches} batch × {self.params.batch_size} doc/batch")
 
@@ -234,16 +212,7 @@ class GeminiExtractor(BaseExtractor):
             all_results.extend(self._process_one_batch(batch_name, chunk))
         return all_results
 
-    # ── 3. Async submit ───────────────────────────────────────────────────────
     def submit_batch_jobs(self, documents: List[dict], state_file: str = "batch_state.json") -> str:
-        """
-        Submit tất cả batches, lưu trạng thái vào file JSON rồi return ngay (non-blocking).
-
-        Workflow:
-            path = extractor.submit_batch_jobs(docs, "my_job.json")
-            # ... sau 1–24h ...
-            results = extractor.collect_batch_jobs(path)
-        """
         n_batches = math.ceil(len(documents) / self.params.batch_size)
         job_id = uuid.uuid4().hex[:12]
         logger.info(f"[submit] {len(documents)} doc → {n_batches} batch | state_file={state_file}")
@@ -281,9 +250,7 @@ class GeminiExtractor(BaseExtractor):
         )
         return state_file
 
-    # ── 4. Async collect ──────────────────────────────────────────────────────
     def collect_batch_jobs(self, state_file: str) -> List[dict]:
-        """Load state_file, poll từng batch, thu kết quả. Ghi output vào <state_file>.results.json."""
         if not os.path.exists(state_file):
             raise FileNotFoundError(f"State file không tồn tại: {state_file}")
 
@@ -314,7 +281,6 @@ class GeminiExtractor(BaseExtractor):
         logger.info(f"[collect] ✅ job_id={job_id} | {len(all_results)} kết quả → {results_file}")
         return all_results
 
-    # ── Internal helpers ──────────────────────────────────────────────────────
     def _make_batch_request(self, doc: dict) -> Optional[types.InlinedRequest]:
         doc_id, raw_text, hint = _parse_input_doc(doc)
         if not raw_text.strip():
@@ -337,7 +303,6 @@ class GeminiExtractor(BaseExtractor):
         )
 
     def _poll_batch(self, batch_name: str) -> Any:
-        """Poll cho đến khi SUCCEEDED / FAILED / timeout."""
         deadline = time.time() + self.params.batch_timeout_sec
         while time.time() < deadline:
             batch = self.client.batches.get(name=batch_name)
@@ -355,10 +320,6 @@ class GeminiExtractor(BaseExtractor):
     def _collect_batch_results(
         self, batch: types.BatchJob, chunk: List[dict]
     ) -> Tuple[List[dict], List[str]]:
-        """
-        Thu kết quả từ batch đã SUCCEEDED qua batch.dest.inlined_responses.
-        Responses trả về theo đúng thứ tự với requests (zip với chunk).
-        """
         results: List[dict] = []
         failed_ids: List[str] = []
 
@@ -402,7 +363,6 @@ class GeminiExtractor(BaseExtractor):
         return results, failed_ids
 
     def _process_one_batch(self, batch_name: Optional[str], chunk: List[dict]) -> List[dict]:
-        """Poll 1 batch, collect kết quả, direct fallback nếu cần."""
         if batch_name is None:
             logger.info(f"  🔄 Direct fallback cho {len(chunk)} doc (batch_name=None)")
             return [self._extract_single_dict(doc) for doc in tqdm(chunk, leave=False)]
@@ -416,7 +376,6 @@ class GeminiExtractor(BaseExtractor):
 
         results, failed_ids = self._collect_batch_results(batch, chunk)
 
-        # Direct retry các doc bị lỗi hoặc thiếu trong kết quả
         returned_ids = {r["document_id"] for r in results}
         doc_by_id = {_parse_input_doc(d)[0]: d for d in chunk}
         missing = [
@@ -433,7 +392,6 @@ class GeminiExtractor(BaseExtractor):
         return results
 
     def _extract_single_dict(self, doc: dict) -> dict:
-        """Nhận dict, trả dict API Contract. Có retry."""
         doc_id, raw_text, hint = _parse_input_doc(doc)
         schema_name, schema_class = _resolve_schema(doc_id, raw_text, hint)
         last_raw = ""
@@ -475,7 +433,6 @@ class GeminiExtractor(BaseExtractor):
 
     @staticmethod
     def _dict_to_result(d: dict) -> ExtractorResult:
-        """Dict API Contract → ExtractorResult."""
         return ExtractorResult(
             schema_used=d.get("classification", ""),
             extracted_dynamic_data={m["field_name"]: m for m in d.get("metadata", [])} or None,
