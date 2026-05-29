@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import numpy    as np
 
-from .constants import LABEL_CLEAN, LABEL_HEAVY, LABEL_SKIP
+from .constants import (LABEL_CLEAN, LABEL_HEAVY, 
+                        LABEL_SKIP, STEP_PARAMS)
 from .decision  import DecisionEngine
 from .models    import PreprocessResult
 from .steps     import (adaptive_threshold, autocrop, denoise, 
@@ -33,11 +34,18 @@ class Preprocessing:
         self.engine = DecisionEngine(provider=provider)
         self.qr_buffer: list = []
 
-    def apply_recipe(self, image: np.ndarray, recipe: list[str]) -> np.ndarray:
+    def apply_recipe(
+            self, 
+            image: np.ndarray, 
+            recipe: list[str], 
+            label: int) -> np.ndarray:
+        
         current = image
+        params = STEP_PARAMS.get(label, {})
         for step_name in recipe:
             step = STEP_MAP[step_name]
-            current = step(current)
+            kwargs = params.get(step_name, {})
+            current = step(current, **kwargs)
         current, self.qr_buffer = qr_detect(current)
         return current
 
@@ -47,7 +55,7 @@ class Preprocessing:
 
         working = image.copy()
         decision = self.engine.evaluate(working)
-        processed = self.apply_recipe(working, RECIPES[decision.label])
+        processed = self.apply_recipe(working, RECIPES[decision.label], decision.label)
 
         metadata = {
             "status": decision.label_name.lower(),

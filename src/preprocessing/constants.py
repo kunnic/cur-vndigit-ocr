@@ -44,3 +44,16 @@ RESIZE_WIDTH = 500
 RESIZE_HEIGHT = 500
 WHITE_RATIO_TOLERANCE = 20
 COEFF_EPSILON = 1e-6
+
+STEP_PARAMS: dict[int, dict[str, dict]] = {
+    LABEL_CLEAN: {
+        "denoise":            {"kernel": 7},
+        "adaptive_threshold": {"block_size": 21, "C": 10},
+        "sharpen":            {"weight": 5},
+    },
+    LABEL_HEAVY: {
+        "denoise":            {"kernel": 5},
+        "adaptive_threshold": {"block_size": 7, "C": 2},
+        "sharpen":            {"weight": 5},
+    },
+}
