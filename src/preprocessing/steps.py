@@ -46,28 +46,42 @@ def deskew(gray: np.ndarray) -> np.ndarray:
     if coords.size < 1:
         return gray
 
-    angle = cv2.minAreaRect(coords)[-1]
-    angle = -(90 + angle) if angle < -45 else -angle
-    if abs(angle) > 45:
+    rect = cv2.minAreaRect(coords)
+    angle = rect[-1]
+
+    if angle > 45:
+        angle -= 90
+    elif angle < -45:
+        angle += 90
+
+    if abs(angle) > 20 or abs(angle) < 0.1:
         return gray
 
+    correction_angle = -angle
+
     height, width = gray.shape[:2]
-    matrix = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1.0)
+    center = (width / 2, height / 2)
+    matrix = cv2.getRotationMatrix2D(center, correction_angle, 1.0)
+
     return cv2.warpAffine(
         gray,
         matrix,
         (width, height),
-        flags=cv2.INTER_CUBIC,
-        borderMode=cv2.BORDER_REPLICATE,
+        flags = cv2.INTER_CUBIC,
+        borderMode = cv2.BORDER_REPLICATE,
     )
 
+
 def enhance_contrast(image: np.ndarray, clip_limit: float = 2.0, tile_size: int = 8) -> np.ndarray:
-    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_size, tile_size))
+    clahe = cv2.createCLAHE(
+        clipLimit = clip_limit,
+        tileGridSize = (tile_size, tile_size),
+    )
     return clahe.apply(image)
 
 
 def levels(image: np.ndarray, black: int = 30, white: int = 220) -> np.ndarray:
-    lut = np.zeros(256, dtype=np.uint8)
+    lut = np.zeros(256, dtype = np.uint8)
     for i in range(256):
         if i <= black:
             lut[i] = 0
@@ -77,6 +91,7 @@ def levels(image: np.ndarray, black: int = 30, white: int = 220) -> np.ndarray:
             lut[i] = int((i - black) / (white - black) * 255)
     return cv2.LUT(image, lut)
 
+
 def orient(image: np.ndarray) -> np.ndarray:
     return rotation_detector.correct(image)
 
@@ -85,7 +100,11 @@ def perspective_correct(image: np.ndarray) -> np.ndarray:
     resize_height = 500
     ratio = image.shape[0] / float(resize_height)
     resize_width = int(image.shape[1] / ratio)
-    small = cv2.resize(image, (resize_width, resize_height), interpolation=cv2.INTER_LINEAR)
+    small = cv2.resize(
+        image,
+        (resize_width, resize_height),
+        interpolation = cv2.INTER_LINEAR,
+    )
 
     contour = detect_document(small)
     if contour is None:
