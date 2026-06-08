@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc        import ABC, abstractmethod
 import os
+import warnings
 
 import joblib
 import numpy    as np
@@ -62,7 +63,7 @@ class DecisionEngine:
                 return DecideJoblib(provider)
             except FileNotFoundError:
                 if self.warn_on_missing_model:
-                    print(f"ERR: DecisionEngine model not found: {provider}")
+                    warnings.warn(f"DecisionEngine model not found: {provider}")
                 if self.missing_model_policy == "raise":
                     raise
                 return None
