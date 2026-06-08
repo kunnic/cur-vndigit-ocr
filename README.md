@@ -36,3 +36,4 @@ images will be a huge improvement.
 
 # Run it on DOCKER
 docker compose build
+docker compose run --rm app python <file> <args>
