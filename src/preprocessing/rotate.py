@@ -1,6 +1,7 @@
 from __future__     import annotations
 
 from dataclasses    import dataclass
+import logging
 
 import cv2
 import numpy as np
@@ -9,13 +10,13 @@ from pytesseract    import Output
 
 from .models        import RotationResult
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class RotationConfig:
     lang: str | None = None
     min_confidence: float = 0.1
     apply_rotation: bool = True
-
 
 class RotationDetector:
     def __init__(self, config: RotationConfig | None = None) -> None:
@@ -32,7 +33,8 @@ class RotationDetector:
                 config = "--psm 0",
                 output_type = Output.DICT,
             )
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Tesseract OSD failed (often due to missing osd.traineddata or too little text): {e}")
             return RotationResult(angle = 0.0, confidence = 0.0)
 
         angle = float(osd_data.get("rotate", 0.0))
