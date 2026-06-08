@@ -18,7 +18,6 @@ OCR_NORMALIZATION = {
 }
 
 class DictionaryCorrector:
-    """Sửa lỗi sử dụng từ điển"""
     
     def __init__(self, confidence_threshold=0.8):
         self.sym_spell = None
@@ -44,7 +43,6 @@ class DictionaryCorrector:
             self.Verbosity = Verbosity
             self.sym_spell = SymSpell(max_dictionary_edit_distance=1, prefix_length=7)
             
-            # đường dẫn file vi_VN.txt
             current_file = Path(__file__).resolve()
             root_dir = current_file.parents[4]
             dict_path = root_dir / "dictionary" / "vi_VN.txt"
@@ -74,29 +72,23 @@ class DictionaryCorrector:
         if not word:
             return word
 
-        # Không sửa số
         if word.isdigit():
             return word
 
-        # Không sửa từ quá ngắn
         if len(word) <= 2:
             return word
 
-        # Không sửa acronym
         if word.isupper():
             return word
 
-        # Không sửa token chứa ký tự đặc biệt
         if re.search(r'[/:-]', word):
             return word
         
-        # Generate candidates
         normalized_word = self.normalize_ocr_token(word)
         suggestions = self.sym_spell.lookup(normalized_word, self.Verbosity.CLOSEST, max_edit_distance=1)
         if not suggestions:
             return word
 
-        # Lấy candidate list
         candidates = []
         for s in suggestions:
             candidate_no_accent = self.remove_accent(s.term)
@@ -105,7 +97,6 @@ class DictionaryCorrector:
         if not candidates:
                 return word
         
-        # Nếu không có context
         if not next_word:
             if candidates:
                 return candidates[0]
@@ -113,7 +104,6 @@ class DictionaryCorrector:
         
         normalized_next_word = self.normalize_ocr_token(next_word)
         
-        # Bigram reranking
         best_candidate = self.ngram_model.rank_candidates(next_word=normalized_next_word, candidates=candidates)
 
         if best_candidate and best_candidate != word:
@@ -132,7 +122,6 @@ class DictionaryCorrector:
 
         for i, text in enumerate(texts):
 
-            # Nếu confidence cao -> bỏ qua
             if confidences and confidences[i] >= self.confidence_threshold:
                 continue
 
@@ -140,7 +129,6 @@ class DictionaryCorrector:
             corrected_words = []
 
             for j, word in enumerate(words):
-            # for word in words:
                 next_word = ""
                 if j < len(words) - 1:
 

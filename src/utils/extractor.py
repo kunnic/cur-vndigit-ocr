@@ -128,7 +128,6 @@ class DocumentExtractor:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 d, m, y = match.groups()
-                # Chuẩn hóa về DD/MM/YYYY
                 return f"{int(d):02d}/{int(m):02d}/{y}"
         return ""
 
@@ -136,15 +135,13 @@ class DocumentExtractor:
         header     = text[:300]
         normalized = self._normalize(header)
         keywords   = {
-            # Văn bản tòa án
             "quyet dinh":        "Quyết định",
-            "quyen dinh":        "Quyết định",   # OCR đọc sai
+            "quyen dinh":        "Quyết định",
             "ban an so":         "Bản án",
             "ban an":            "Bản án",
             "bien ban hop":      "Biên bản họp",
             "bien ban kiem tra": "Biên bản kiểm tra",
             "bien ban":          "Biên bản",
-            # Văn bản hành chính
             "cong van":          "Công văn",
             "nghi quyet":        "Nghị quyết",
             "nghi dinh":         "Nghị định",
@@ -163,7 +160,6 @@ class DocumentExtractor:
             "phuong an":         "Phương án",
             "de an":             "Đề án",
             "huong dan":         "Hướng dẫn",
-            # Đơn từ
             "don khoi kien":     "Đơn khởi kiện",
             "don khang cao":     "Đơn kháng cáo",
             "don to cao":        "Đơn tố cáo",
@@ -177,7 +173,6 @@ class DocumentExtractor:
             if key in normalized:
                 return value
 
-        # Fuzzy fallback
         candidates = list(keywords.keys())
         close = difflib.get_close_matches(normalized[:50], candidates, n=1, cutoff=0.6)
         if close:
@@ -271,9 +266,8 @@ class DocumentExtractor:
         }
 
         max_y    = max(w.y for w in words)
-        top_zone = max_y * 0.5  # tìm trong 50% đầu trang
+        top_zone = max_y * 0.5
 
-        # Lọc từ IN HOA, không chứa số, không có ký tự đặc biệt
         center_words = [
             w for w in words
             if w.y < top_zone
@@ -289,7 +283,6 @@ class DocumentExtractor:
         if not center_words:
             return ""
 
-        # Gom thành dòng
         center_words.sort(key=lambda w: (w.y, w.x))
         lines   = []
         current = [center_words[0]]
@@ -302,13 +295,11 @@ class DocumentExtractor:
                 current = [word]
         lines.append(current)
 
-        # Tìm dòng đầu tiên có từ khóa cơ quan
         result_lines = []
         for line in lines:
             line_text = " ".join(w.text for w in sorted(line, key=lambda w: w.x))
             if any(kw in line_text for kw in co_quan_keywords):
                 result_lines.append(line_text)
-                # Lấy thêm dòng tiếp theo nếu cũng IN HOA (tối đa 1 dòng)
                 idx = lines.index(line)
                 if idx + 1 < len(lines):
                     next_text = " ".join(w.text for w in sorted(lines[idx+1], key=lambda w: w.x))
@@ -323,27 +314,20 @@ class DocumentExtractor:
     
     def _extract_co_quan(self, text: str) -> str:
         patterns = [
-            # Tòa án các cấp
             r"(TÒA ÁN NHÂN \S+(?:\s+\S+){1,5})(?=\s+(?:CỘNG|Độc|độc|Với|TẠI|tại|\-))",
             r"(TÒA ÁN NHÂN DÂN KHU VỰC\s+\S+(?:\s+\S+){1,3})",
             r"(TÒA ÁN NHÂN DÂN CẤP CAO(?:\s+\S+){1,3})",
-            # Ủy ban nhân dân
             r"((?:ỦY BAN|UỶ BAN) NHÂN DÂN(?:\s+\S+){1,4})(?=\s+(?:Độc|độc|\-))",
             r"(UBND \S+(?: \S+)?)",
-            # Viện kiểm sát
             r"(VIỆN KIỂM SÁT NHÂN DÂN(?:\s+\S+){1,4})",
             r"(VIỆN KIỂM SÁT(?:\s+\S+){1,3})",
-            # Tòa án chữ thường
             r"(Tòa án nhân dân(?:\s+\S+){1,4})(?=\s+(?:[-–]|Độc|độc))",
-            # Bộ, Cục, Sở, Chi cục, Văn phòng
             r"(BỘ \S+(?: \S+){1,3})",
             r"(CỤC \S+(?: \S+){1,2})",
             r"(SỞ \S+(?: \S+){1,2})",
             r"(CHI CỤC \S+(?: \S+){1,2})",
             r"(VĂN PHÒNG \S+(?: \S+){1,2})",
-            # Hội đồng nhân dân
             r"(HỘI ĐỒNG NHÂN DÂN(?:\s+\S+){1,4})",
-            # Ban
             r"(BAN \S+(?: \S+){1,2})",
         ]
         for pattern in patterns:

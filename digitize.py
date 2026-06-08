@@ -65,7 +65,8 @@ class Digitize:
     ) -> None:
         cfg = DigitizeConfig(**(config or {}))
 
-        self.preprocess = Preprocessing(cfg.preprocessing or {})
+        pre_cfg = cfg.preprocessing or {}
+        self.preprocess = Preprocessing(provider=pre_cfg.get("decide_engine", {}).get("provider"))
         self.ocr_engine = _build_ocr_engine(ocr)
         self.autocorrect = _build_autocorrect(cfg.autocorrect)
         self.confidence_scorer = _build_confidence_scorer(cfg.confidence)

@@ -110,12 +110,7 @@ _DOCID_PREFIX_SCHEMA: List[tuple] = [
 # ══════════════════════════════════════════════════════════════════════════════
 
 def auto_detect_schema(text: str) -> str:
-    """
-    Detect schema theo 3 pass:
-    - Pass 0: nhận diện tiêu đề/dòng đầu (ưu tiên cao nhất)
-    - Pass 1: keyword scoring toàn văn
-    - Pass 2: regex fallback
-    """
+
     t = text.lower()
     header = t[:300]
 
