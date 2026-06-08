@@ -4,10 +4,11 @@ import cv2
 import magic
 import numpy as np
 
-from .constants import (STEP_PARAMS, PreprocessError, RECIPES)
+from .constants import (LABEL_CLEAN, LABEL_HEAVY,
+                        LABEL_SKIP, STEP_PARAMS, PreprocessError, RECIPES, Step)
 from .decision  import DecisionEngine
 from .models    import PreprocessResult
-from .steps     import (
+from .steps import (
     adaptive_threshold,
     autocrop,
     denoise,
@@ -22,17 +23,17 @@ from .steps     import (
 )
 
 STEP_MAP = {
-    "grayscale": to_grayscale,
-    "orientation": orient,
-    "perspective": perspective_correct,
-    "denoise": denoise,
-    "deskew": deskew,
-    "autocrop": autocrop,
-    "adaptive_threshold": adaptive_threshold,
-    "sharpen": sharpen,
-    "enhance_contrast": enhance_contrast,
-    "levels": levels,
-    "qr_detect": qr_detect
+    Step.GRAYSCALE: to_grayscale,
+    Step.ORIENTATION: orient,
+    Step.PERSPECTIVE: perspective_correct,
+    Step.DENOISE: denoise,
+    Step.DESKEW: deskew,
+    Step.AUTOCROP: autocrop,
+    Step.ADAPTIVE_THRESHOLD: adaptive_threshold,
+    Step.SHARPEN: sharpen,
+    Step.ENHANCE_CONTRAST: enhance_contrast,
+    Step.LEVELS: levels,
+    Step.QR_DETECT: qr_detect
 }
 
 class Preprocessing:
